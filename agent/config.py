@@ -30,7 +30,8 @@ def load():
       os.getenv("DATA_DIR","/data"),b("KILL_SWITCH",False))
     if not c.shadow: raise RuntimeError("SHADOW_MODE must be true")
     if c.execution: raise RuntimeError("HARD LOCK: EXECUTION_ENABLED must be false")
-    if not c.model.endswith(":free"): raise RuntimeError("FREE-ONLY LOCK: model must end with :free")
+    if not (c.model.endswith(":free") or c.model=="openrouter/free"):
+        raise RuntimeError("FREE-ONLY LOCK: model must be a :free model or openrouter/free")
     if c.network!="mainnet": raise RuntimeError("V1 uses Hyperliquid mainnet PUBLIC DATA only")
     if not c.api_key: raise RuntimeError("OPENROUTER_API_KEY missing")
     return c
