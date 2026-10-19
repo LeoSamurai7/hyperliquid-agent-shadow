@@ -26,7 +26,10 @@ class Runtime:
                 g=entry_gate(d,mark,self.st.equity(),rs["daily_pnl"],rs["trades_today"],self.c);ok=g.ok;reason=g.reason
                 if ok:openv(self.st,d.action,mark,g,d,self.c,ts)
             elif d.action=="CLOSE":reason="NO_POSITION"
-        self.st.decision(ts,d,ok,reason,{"meta":meta,"mark":mark,"risk":rs});self.last_ai=ts;self.st.setkv("last_ai_ms",ts)
+        self.st.decision(ts,d,ok,reason,{"meta":meta,"mark":mark,"risk":rs})
+        if meta.get("ok") is True:
+            self.last_ai=ts
+            self.st.setkv("last_ai_ms",ts)
     def loop(self):
         while not self.stop.is_set():
             try:self.cycle();self.err=None
