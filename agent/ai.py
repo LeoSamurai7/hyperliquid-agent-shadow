@@ -22,14 +22,33 @@ class Trader:
     def __init__(self,key,base,model):self.key=key;self.base=base;self.model=model;self.s=requests.Session()
     def decide(self,snap,pos,risk,recent):
         user=json.dumps({"market":snap,"virtual_position":pos,"risk":risk,"recent_closed":recent[-5:]},separators=(",",":"))
+        schema={"type":"object","properties":{
+              "action":{"type":"string","enum":["LONG","SHORT","HOLD","CLOSE"]},
+              "confidence":{"type":"integer","description":"Integer from 0 to 100"},
+              "stop_loss_pct":{"type":["number","null"]},
+              "take_profit_pct":{"type":["number","null"]},
+              "thesis":{"type":"string"},
+              "invalidation":{"type":"string"},
+              "horizon_hours":{"type":"integer","description":"Integer from 1 to 168"}},
+              "required":["action","confidence","stop_loss_pct","take_profit_pct","thesis","invalidation","horizon_hours"],
+              "additionalProperties":False}
         body={"model":self.model,"temperature":0.15,"max_tokens":700,
+              "provider":{"require_parameters":True},
+              "response_format":{"type":"json_schema","json_schema":{"name":"trade_decision","strict":True,"schema":schema}},
               "messages":[{"role":"system","content":SYS},{"role":"user","content":user}]}
         err=None
         for _ in range(2):
             try:
                 r=self.s.post(self.base+"/chat/completions",headers={"Authorization":f"Bearer {self.key}","Content-Type":"application/json"},
                               json=body,timeout=45);r.raise_for_status();d=r.json()
-                txt=d["choices"][0]["message"]["content"];return Decision.model_validate(parse(txt)),{"usage":d.get("usage"),"raw":txt}
-            except Exception as e:err=e
+                txt=d["choices"][0]["message"].get("content") or ""
+                return Decision.model_validate(parse(txt)),{"ok":True,"model":d.get("model"),"usage":d.get("usage"),"raw":txt}
+            except Exception as e:
+                err=e
+                try:
+                    last_text=r.text[:1200]
+                except Exception:
+                    last_text=""
+
         return Decision(action="HOLD",confidence=0,thesis=f"AI fail-safe: {type(err).__name__}",
-                        invalidation="No valid AI decision",horizon_hours=1),{"error":repr(err)}
+                        invalidation="No valid AI decision",horizon_hours=1),{"ok":False,"error":repr(err),"response":locals().get("last_text","")}
