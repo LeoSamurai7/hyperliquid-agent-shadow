@@ -1,0 +1,27 @@
+{
+  "project": "HYPERLIQUID_AGENT_V1_LIVE_SHADOW",
+  "version": "1.0.0",
+  "mode": "LIVE_SHADOW_ONLY",
+  "market_data": "Hyperliquid Mainnet public",
+  "symbol": "BTC",
+  "execution_enabled": false,
+  "starting_equity_usd": 1000,
+  "default_free_model": "qwen/qwen3.8-27b:free",
+  "ai_interval_minutes": 60,
+  "market_monitor_seconds": 300,
+  "risk_per_trade_pct": 0.25,
+  "max_daily_loss_pct": 1.5,
+  "max_trades_per_day": 6,
+  "max_positions": 1,
+  "min_confidence": 75,
+  "stop_pct_range": [
+    0.4,
+    4.0
+  ],
+  "min_reward_risk": 1.5,
+  "fee_bps_per_side": 4.5,
+  "slippage_bps": 1.0,
+  "evaluation": "at least 14 days AND 30 closed trades; technical bug fixes only during evaluation",
+  "testnet": "only after Shadow pass",
+  "mainnet": "NOT AUTHORIZED"
+}
