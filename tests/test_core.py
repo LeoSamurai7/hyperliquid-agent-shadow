@@ -32,3 +32,25 @@ def test_store_system_events(tmp_path):
     st.event(1,"AI_PROVIDER_ERROR",{"status":429})
     e=st.events(10)
     assert len(e)==1 and e[0]["event_type"]=="AI_PROVIDER_ERROR"
+
+
+def test_config_allows_approved_paid_model(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY","test")
+    monkeypatch.setenv("OPENROUTER_MODEL","nvidia/nemotron-3.5-lightning")
+    monkeypatch.setenv("SHADOW_MODE","true")
+    monkeypatch.setenv("EXECUTION_ENABLED","false")
+    monkeypatch.setenv("HL_DATA_NETWORK","mainnet")
+    from agent.config import load
+    c=load()
+    assert c.model=="nvidia/nemotron-3.5-lightning"
+
+def test_config_rejects_unapproved_paid_model(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY","test")
+    monkeypatch.setenv("OPENROUTER_MODEL","some/paid-model")
+    monkeypatch.setenv("SHADOW_MODE","true")
+    monkeypatch.setenv("EXECUTION_ENABLED","false")
+    monkeypatch.setenv("HL_DATA_NETWORK","mainnet")
+    import pytest
+    from agent.config import load
+    with pytest.raises(RuntimeError, match="MODEL LOCK"):
+        load()
