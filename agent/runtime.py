@@ -52,7 +52,8 @@ class Runtime:
         self.st.setkv("last_ai_attempt_ms",ts)
 
         if meta.get("ok") is not True:
-            self.st.event(ts,"AI_PROVIDER_ERROR",
+            event_type=meta.get("error_kind") or "AI_PROVIDER_ERROR"
+            self.st.event(ts,event_type,
                           {"meta":meta,"mark":mark,"risk":rs,"model":self.c.model},
                           severity="WARN")
             return
