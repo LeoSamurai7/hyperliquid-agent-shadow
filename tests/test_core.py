@@ -54,3 +54,30 @@ def test_config_rejects_unapproved_paid_model(monkeypatch):
     from agent.config import load
     with pytest.raises(RuntimeError, match="MODEL LOCK"):
         load()
+
+
+def test_decision_contract_rejects_direction_with_zero_confidence():
+    import pytest
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Decision(action="SHORT",confidence=0,stop_loss_pct=1.5,take_profit_pct=2.5,
+                 thesis="x",invalidation="y",horizon_hours=8)
+
+def test_decision_contract_rejects_zero_horizon():
+    import pytest
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Decision(action="HOLD",confidence=0,stop_loss_pct=None,take_profit_pct=None,
+                 thesis="x",invalidation="y",horizon_hours=0)
+
+def test_decision_contract_hold_is_zero_confidence():
+    import pytest
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Decision(action="HOLD",confidence=50,stop_loss_pct=None,take_profit_pct=None,
+                 thesis="x",invalidation="y",horizon_hours=4)
+
+def test_decision_contract_valid_short():
+    d=Decision(action="SHORT",confidence=82,stop_loss_pct=1.5,take_profit_pct=2.5,
+               thesis="x",invalidation="y",horizon_hours=8)
+    assert d.action=="SHORT" and d.confidence==82
