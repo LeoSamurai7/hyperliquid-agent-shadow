@@ -19,6 +19,9 @@ class Store:
             CREATE TABLE IF NOT EXISTS decisions(
               id INTEGER PRIMARY KEY,ts_ms INTEGER,action TEXT,confidence INTEGER,
               approved INTEGER,gate_reason TEXT,payload TEXT);
+            CREATE TABLE IF NOT EXISTS observer_decisions(
+              id INTEGER PRIMARY KEY,ts_ms INTEGER,action TEXT,confidence INTEGER,
+              hypothetical_approved INTEGER,gate_reason TEXT,payload TEXT);
             CREATE TABLE IF NOT EXISTS trades(
               id INTEGER PRIMARY KEY,side TEXT,entry_ts INTEGER,exit_ts INTEGER,
               entry_price REAL,exit_price REAL,qty REAL,notional REAL,stop_price REAL,tp_price REAL,
@@ -70,11 +73,34 @@ class Store:
             c.execute("INSERT INTO decisions VALUES(NULL,?,?,?,?,?,?)",
                       (ts,d.action,d.confidence,int(ok),reason,json.dumps(payload)))
 
+    def observer_decision(self,ts,d,ok,reason,payload):
+        with self.conn() as c:
+            c.execute("INSERT INTO observer_decisions VALUES(NULL,?,?,?,?,?,?)",
+                      (ts,d.action,d.confidence,int(ok),reason,json.dumps(payload)))
+
     def decisions(self,n=50,include_invalid=False):
-        # Fetch extra rows because historical API failures were once stored as HOLD decisions.
         fetch_n=min(max(n*10,n),2000)
         with self.conn() as c:
             rows=c.execute("SELECT * FROM decisions ORDER BY id DESC LIMIT ?",(fetch_n,)).fetchall()
+        out=[]
+        for row in rows:
+            item=dict(row)
+            if include_invalid:
+                out.append(item)
+            else:
+                try:
+                    p=json.loads(item.get("payload") or "{}")
+                    if p.get("meta",{}).get("ok") is True:
+                        out.append(item)
+                except Exception:
+                    pass
+            if len(out)>=n:break
+        return out
+
+    def observers(self,n=100,include_invalid=False):
+        fetch_n=min(max(n*10,n),3000)
+        with self.conn() as c:
+            rows=c.execute("SELECT * FROM observer_decisions ORDER BY id DESC LIMIT ?",(fetch_n,)).fetchall()
         out=[]
         for row in rows:
             item=dict(row)

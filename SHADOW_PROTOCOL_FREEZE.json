@@ -1,6 +1,6 @@
 {
-  "project": "HYPERLIQUID_AGENT_V1_1_LIVE_SHADOW",
-  "version": "1.1.0",
+  "project": "HYPERLIQUID_AGENT_V1_2_LIVE_SHADOW",
+  "version": "1.2.0",
   "mode": "LIVE_SHADOW_ONLY",
   "market_data": "Hyperliquid Mainnet public",
   "symbol": "BTC",
@@ -20,7 +20,7 @@
   "min_reward_risk": 1.5,
   "fee_bps_per_side": 4.5,
   "slippage_bps": 1,
-  "evaluation": "at least 14 days AND 30 closed trades; AI/provider/contract errors excluded from strategy decisions; technical bug fixes only during evaluation",
+  "evaluation": "Official lane only: at least 14 days AND 30 closed trades; observer/provider/contract errors excluded from strategy metrics; technical bug fixes only during evaluation",
   "testnet": "only after Shadow pass",
   "mainnet": "NOT AUTHORIZED",
   "model": "nvidia/nemotron-3.5-lightning",
@@ -35,5 +35,17 @@
     ],
     "repair_retries": 1,
     "contract": "HOLD confidence=0; LONG/SHORT confidence 1-100 with positive SL/TP; horizon 1-168"
+  },
+  "fast_observer": {
+    "enabled": true,
+    "interval_minutes": 15,
+    "min_interval_lock_minutes": 10,
+    "execution": "FORBIDDEN",
+    "trade_mutation": "FORBIDDEN",
+    "storage": "observer_decisions",
+    "endpoint": "/observer",
+    "purpose": "research-only higher-frequency sampling; records hypothetical gate outcome without opening/closing positions",
+    "official_lane_priority": true,
+    "same_snapshot_with_official": false
   }
 }

@@ -81,3 +81,40 @@ def test_decision_contract_valid_short():
     d=Decision(action="SHORT",confidence=82,stop_loss_pct=1.5,take_profit_pct=2.5,
                thesis="x",invalidation="y",horizon_hours=8)
     assert d.action=="SHORT" and d.confidence==82
+
+
+def test_store_observer_is_separate_from_strategy(tmp_path):
+    from agent.store import Store
+    from agent.ai import Decision
+    st=Store(str(tmp_path),1000)
+    d=Decision(action="SHORT",confidence=82,stop_loss_pct=1.0,take_profit_pct=2.0,
+               thesis="research",invalidation="x",horizon_hours=8)
+    st.observer_decision(10,d,True,"OK",{"meta":{"ok":True},"research_only":True})
+    assert len(st.observers(10))==1
+    assert st.trades(10)==[]
+    assert st.decisions(10)==[]
+
+def test_config_observer_defaults_enabled(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY","test")
+    monkeypatch.setenv("OPENROUTER_MODEL","nvidia/nemotron-3.5-lightning")
+    monkeypatch.setenv("SHADOW_MODE","true")
+    monkeypatch.setenv("EXECUTION_ENABLED","false")
+    monkeypatch.setenv("HL_DATA_NETWORK","mainnet")
+    monkeypatch.delenv("FAST_OBSERVER_ENABLED",raising=False)
+    monkeypatch.delenv("FAST_OBSERVER_INTERVAL_MINUTES",raising=False)
+    from agent.config import load
+    c=load()
+    assert c.observer_enabled is True
+    assert c.observer_minutes==15
+
+def test_config_rejects_too_fast_observer(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY","test")
+    monkeypatch.setenv("OPENROUTER_MODEL","nvidia/nemotron-3.5-lightning")
+    monkeypatch.setenv("SHADOW_MODE","true")
+    monkeypatch.setenv("EXECUTION_ENABLED","false")
+    monkeypatch.setenv("HL_DATA_NETWORK","mainnet")
+    monkeypatch.setenv("FAST_OBSERVER_INTERVAL_MINUTES","5")
+    import pytest
+    from agent.config import load
+    with pytest.raises(RuntimeError, match="OBSERVER LOCK"):
+        load()
