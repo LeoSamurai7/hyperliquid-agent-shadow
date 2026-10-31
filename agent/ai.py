@@ -1,4 +1,4 @@
-import json,requests
+import json,requests,time
 from pydantic import BaseModel,Field,model_validator
 from typing import Literal
 
@@ -132,3 +132,71 @@ class Trader:
                 thesis=f"AI fail-safe: {type(e).__name__}",
                 invalidation="No valid AI decision",horizon_hours=1
             ),{"ok":False,"error_kind":kind,"error":repr(e),"response":raw}
+
+
+    def smoke(self):
+        """Read-only OpenRouter/tool-contract smoke test. Never reaches risk or execution."""
+        user=json.dumps({
+            "smoke_test":True,
+            "instruction":"Connectivity/contract test only. Return HOLD with confidence 0, null stop_loss_pct, null take_profit_pct, a short thesis, invalidation='N/A', horizon_hours=1. Do not infer or propose any trade.",
+            "candidate":{"kind":"ENTRY","side":"LONG","reason":"SMOKE_ONLY","fingerprint":"SMOKE_ONLY"},
+            "market":{"coin":"BTC","smoke_only":True},
+            "virtual_position":None,
+            "risk":{"smoke_only":True}
+        },separators=(",",":"))
+        r=None
+        raw=""
+        started=time.perf_counter()
+        try:
+            body=self._body(user)
+            body["max_tokens"]=250
+            r=self.s.post(
+                self.base+"/chat/completions",
+                headers={"Authorization":f"Bearer {self.key}","Content-Type":"application/json"},
+                json=body,timeout=45
+            )
+            status=int(getattr(r,"status_code",0) or 0)
+            r.raise_for_status()
+            data=r.json()
+            choice=data["choices"][0]
+            msg=choice.get("message") or {}
+            calls=msg.get("tool_calls") or []
+            if not calls:
+                raise ValueError("missing tool_call")
+            fn=(calls[0].get("function") or {})
+            if fn.get("name")!="submit_trade_decision":
+                raise ValueError("wrong tool_call")
+            args=fn.get("arguments")
+            obj=json.loads(args) if isinstance(args,str) else args
+            d=Decision.model_validate(obj)
+            if d.action!="HOLD":
+                raise ValueError("smoke test must return HOLD")
+            return d,{
+                "ok":True,
+                "http_status":status,
+                "latency_ms":round((time.perf_counter()-started)*1000),
+                "model":data.get("model"),
+                "provider":data.get("provider"),
+                "usage":data.get("usage"),
+                "finish_reason":choice.get("finish_reason"),
+                "native_finish_reason":choice.get("native_finish_reason"),
+                "tool_call":"submit_trade_decision",
+                "smoke_only":True
+            }
+        except Exception as e:
+            if r is not None:
+                try: raw=r.text[:1600]
+                except Exception: pass
+            return Decision(
+                action="HOLD",confidence=0,stop_loss_pct=None,take_profit_pct=None,
+                thesis=f"AI smoke fail-safe: {type(e).__name__}",
+                invalidation="N/A",horizon_hours=1
+            ),{
+                "ok":False,
+                "http_status":int(getattr(r,"status_code",0) or 0) if r is not None else None,
+                "latency_ms":round((time.perf_counter()-started)*1000),
+                "error":repr(e),
+                "response":raw,
+                "model_requested":self.model,
+                "smoke_only":True
+            }

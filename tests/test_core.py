@@ -176,3 +176,49 @@ def test_execution_journal_idempotency(tmp_path):
     st.execution_finish("fp","OPEN",{"ok":True})
     x=st.execution_latest()
     assert x["fingerprint"]=="fp" and x["status"]=="OPEN"
+
+
+def test_ai_smoke_pass_uses_same_model_and_forces_hold():
+    from agent.ai import Trader
+    class Resp:
+        status_code=200
+        text=""
+        def raise_for_status(self): pass
+        def json(self):
+            return {
+                "model":"nvidia/nemotron-3.5-lightning:free",
+                "provider":"TEST_PROVIDER",
+                "usage":{"total_tokens":10},
+                "choices":[{"finish_reason":"tool_calls","native_finish_reason":"tool_calls",
+                            "message":{"tool_calls":[{"function":{
+                                "name":"submit_trade_decision",
+                                "arguments":"{\\\"action\\\":\\\"HOLD\\\",\\\"confidence\\\":0,\\\"stop_loss_pct\\\":null,\\\"take_profit_pct\\\":null,\\\"thesis\\\":\\\"smoke ok\\\",\\\"invalidation\\\":\\\"N/A\\\",\\\"horizon_hours\\\":1}"
+                            }}]}}]
+            }
+    class Sess:
+        def __init__(self): self.body=None
+        def post(self,url,headers,json,timeout):
+            self.body=json
+            return Resp()
+    t=Trader("secret","https://openrouter.ai/api/v1","nvidia/nemotron-3.5-lightning:free")
+    t.s=Sess()
+    d,m=t.smoke()
+    assert m["ok"] is True and d.action=="HOLD"
+    assert t.s.body["model"]=="nvidia/nemotron-3.5-lightning:free"
+    assert t.s.body["max_tokens"]==250
+
+def test_ai_smoke_fail_does_not_expose_api_key():
+    from agent.ai import Trader
+    class Resp:
+        status_code=404
+        text='{"error":{"message":"ZDR violation"}}'
+        def raise_for_status(self):
+            import requests
+            raise requests.HTTPError("404")
+    class Sess:
+        def post(self,*a,**k): return Resp()
+    t=Trader("super-secret-key","https://openrouter.ai/api/v1","nvidia/nemotron-3.5-lightning:free")
+    t.s=Sess()
+    d,m=t.smoke()
+    assert m["ok"] is False and d.action=="HOLD"
+    assert "super-secret-key" not in str(m)

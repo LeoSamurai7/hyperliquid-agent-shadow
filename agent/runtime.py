@@ -31,8 +31,8 @@ class Runtime:
         ts=(self.snap or {}).get("ts_ms")
         day=self._day(ts or int(time.time()*1000))
         return {
-            "version":"1.4.0",
-            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY",
+            "version":"1.4.1",
+            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY_SMOKE",
             "execution_enabled":bool(self.c.execution),
             "execution_target":self.c.execution_target,
             "max_testnet_notional_usd":self.c.max_testnet_notional_usd,
@@ -48,6 +48,38 @@ class Runtime:
             "last_execution_reconcile":self.exec.last_reconcile,
             "last_snapshot_ts":ts
         }
+
+    def ai_smoke(self,cache_seconds=300):
+        now=int(time.time()*1000)
+        cached=self.st.getkv("v141_last_ai_smoke",None)
+        if isinstance(cached,dict) and now-int(cached.get("ts_ms",0) or 0) < int(cache_seconds)*1000:
+            out=dict(cached); out["cached"]=True
+            return out
+
+        d,meta=self.ai.smoke()
+        result={
+            "ok":bool(meta.get("ok") is True),
+            "status":"PASS" if meta.get("ok") is True else "FAIL",
+            "ts_ms":now,
+            "model_requested":self.c.model,
+            "provider":meta.get("provider"),
+            "model_returned":meta.get("model"),
+            "http_status":meta.get("http_status"),
+            "latency_ms":meta.get("latency_ms"),
+            "tool_contract_ok":bool(meta.get("ok") is True),
+            "decision":d.model_dump(),
+            "error":None if meta.get("ok") is True else meta.get("error"),
+            "response":None if meta.get("ok") is True else meta.get("response"),
+            "execution_path_touched":False,
+            "signer_called":False,
+            "cached":False
+        }
+        self.st.setkv("v141_last_ai_smoke",result)
+        self.st.event(now,
+                      "AI_SMOKE_PASS" if result["ok"] else "AI_SMOKE_FAIL",
+                      result,
+                      severity="INFO" if result["ok"] else "WARN")
+        return result
 
     def _run_ai(self,snap,p,rs,ts,mark,cand):
         day=self._day(ts)
