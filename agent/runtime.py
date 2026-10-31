@@ -31,8 +31,8 @@ class Runtime:
         ts=(self.snap or {}).get("ts_ms")
         day=self._day(ts or int(time.time()*1000))
         return {
-            "version":"1.4.3",
-            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY_E2E",
+            "version":"1.4.4",
+            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY_E2E_V2",
             "execution_enabled":bool(self.c.execution),
             "execution_target":self.c.execution_target,
             "max_testnet_notional_usd":self.c.max_testnet_notional_usd,
@@ -50,7 +50,7 @@ class Runtime:
         }
 
     def testnet_trigger(self,confirm):
-        if confirm!="TESTNET_ONLY_143":
+        if confirm!="TESTNET_ONLY_144":
             return {"ok":False,"status":"CONFIRMATION_REQUIRED"}
         if self.c.execution_target!="testnet":
             return {"ok":False,"status":"TESTNET_ONLY_BLOCKED"}
