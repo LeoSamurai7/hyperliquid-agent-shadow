@@ -139,24 +139,19 @@ class TestnetExecution:
         state={"started":True,"ts_ms":int(ts),"fingerprint":fp,"side":side,
                "requested_notional_usd":float(notional_usd),"qty":qty,"mark":float(mark),
                "status":"STARTED"}
-        self.st.setkv("v143_test_trigger_state",state)
+        self.st.setkv("v144_test_trigger_state",state)
         self.st.event(ts,"TEST_TRIGGER_STARTED",state,severity="INFO")
 
-        sl=0.01
-        tp=0.02
-        stop=mark*(1-sl) if side=="LONG" else mark*(1+sl)
-        target=mark*(1+tp) if side=="LONG" else mark*(1-tp)
-
         try:
-            submit=self.signer.place_bracket(
-                self.c.symbol,side=="LONG",qty,mark,stop,target)
+            submit=self.signer.testnet_smoke_bracket(
+                self.c.symbol,12.0,side=="LONG")
             self.st.event(ts,"TEST_TRIGGER_ORDER_SENT",
                           {"fingerprint":fp,"submit":submit,"qty":qty,"side":side},
                           severity="INFO")
         except Exception as e:
             err=f"{type(e).__name__}: {e}"
             state.update({"status":"ENTRY_ERROR","error":err})
-            self.st.setkv("v143_test_trigger_state",state)
+            self.st.setkv("v144_test_trigger_state",state)
             self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
             self.last_error=err
             return {"ok":False,**state}
@@ -171,7 +166,7 @@ class TestnetExecution:
         except Exception as e:
             err=f"{type(e).__name__}: {e}"
             state.update({"status":"ENTRY_RECONCILE_ERROR","error":err})
-            self.st.setkv("v143_test_trigger_state",state)
+            self.st.setkv("v144_test_trigger_state",state)
             self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
             self.last_error=err
             return {"ok":False,**state}
@@ -183,7 +178,7 @@ class TestnetExecution:
                       severity="INFO" if entry_evidence else "WARN")
         if not entry_evidence:
             state.update({"status":"NO_ENTRY_FILL","recent_fills":recent[:6]})
-            self.st.setkv("v143_test_trigger_state",state)
+            self.st.setkv("v144_test_trigger_state",state)
             self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
             return {"ok":False,**state}
 
@@ -194,7 +189,7 @@ class TestnetExecution:
         except Exception as e:
             err=f"{type(e).__name__}: {e}"
             state.update({"status":"CLOSE_ERROR","error":err})
-            self.st.setkv("v143_test_trigger_state",state)
+            self.st.setkv("v144_test_trigger_state",state)
             self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
             self.last_error=err
             return {"ok":False,**state}
@@ -209,7 +204,7 @@ class TestnetExecution:
         except Exception as e:
             err=f"{type(e).__name__}: {e}"
             state.update({"status":"FINAL_RECONCILE_ERROR","error":err})
-            self.st.setkv("v143_test_trigger_state",state)
+            self.st.setkv("v144_test_trigger_state",state)
             self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
             self.last_error=err
             return {"ok":False,**state}
@@ -223,7 +218,7 @@ class TestnetExecution:
             "recent_fills":recent2[:10],
             "finished_ms":int(time.time()*1000),
         })
-        self.st.setkv("v143_test_trigger_state",state)
+        self.st.setkv("v144_test_trigger_state",state)
         self.st.event(ts,
                       "TEST_TRIGGER_PASS" if flat else "TEST_TRIGGER_FAILED",
                       state,severity="INFO" if flat else "ERROR")
