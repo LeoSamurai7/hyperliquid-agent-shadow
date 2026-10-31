@@ -7,7 +7,7 @@ from agent.runtime import Runtime
 from agent.signer import SignerClient
 
 c=load(); st=Store(c.data_dir,c.equity); rt=Runtime(c,st); signer=SignerClient(c.signer_base_url,c.signer_token)
-app=FastAPI(title="Hyperliquid Agent V1.4.2 Testnet Execution Validator")
+app=FastAPI(title="Hyperliquid Agent V1.4.3 Testnet Execution Validator")
 
 @app.on_event("startup")
 def start(): threading.Thread(target=rt.loop,daemon=True).start()
@@ -25,6 +25,14 @@ def health():
 @app.get("/ai/smoke")
 def ai_smoke():
     return rt.ai_smoke(cache_seconds=300)
+
+@app.post("/execution/test-trigger")
+def execution_test_trigger(confirm:str=""):
+    return rt.testnet_trigger(confirm)
+
+@app.get("/execution/test-trigger/status")
+def execution_test_trigger_status():
+    return st.getkv("v143_test_trigger_state",{"started":False,"status":"NOT_RUN"})
 
 @app.get("/execution/health")
 def execution_health():
@@ -66,7 +74,7 @@ def report():
     x=st.recent(500); wins=sum(1 for t in x if (t.get("pnl") or 0)>0)
     now=int(time.time()*1000)
     day=datetime.fromtimestamp(now/1000,timezone.utc).strftime("%Y-%m-%d")
-    return {"version":"1.4.2","starting_equity":c.equity,"current_equity":st.equity(),
+    return {"version":"1.4.3","starting_equity":c.equity,"current_equity":st.equity(),
             "closed_trades":len(x),"wins":wins,"win_rate":wins/len(x) if x else None,
             "realized_pnl":sum(float(t.get("pnl") or 0) for t in x),
             "today":st.stats(),"position":st.position(),
