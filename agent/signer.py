@@ -71,6 +71,16 @@ class SignerClient:
             "take_profit":float(take_profit)
         },timeout=30)
 
+    def place_transport_bracket(self,coin,is_buy,size,strategy_entry_price,stop_loss_pct,take_profit_pct):
+        return self._post("/place_testnet_transport_bracket",{
+            "coin":coin,
+            "is_buy":bool(is_buy),
+            "size":float(size),
+            "strategy_entry_price":float(strategy_entry_price),
+            "stop_loss_pct":float(stop_loss_pct),
+            "take_profit_pct":float(take_profit_pct)
+        },timeout=30)
+
     def testnet_smoke_bracket(self,coin="BTC",notional_usd=12.0,is_buy=True):
         return self._post("/testnet_smoke_bracket",{
             "coin":coin,"notional_usd":float(notional_usd),"is_buy":bool(is_buy)
