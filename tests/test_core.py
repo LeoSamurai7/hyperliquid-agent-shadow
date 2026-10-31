@@ -19,7 +19,7 @@ def test_store_filters_failed_ai_decisions(tmp_path):
     from agent.store import Store
     from agent.ai import Decision
     st=Store(str(tmp_path),1000)
-    d=Decision(action="HOLD",confidence=0,stop_loss_pct=0,take_profit_pct=0,
+    d=Decision(action="HOLD",confidence=0,stop_loss_pct=None,take_profit_pct=None,
                thesis="x",invalidation="y",horizon_hours=24)
     st.decision(1,d,False,"HOLD",{"meta":{"ok":False}})
     st.decision(2,d,False,"HOLD",{"meta":{"ok":True}})
@@ -34,7 +34,7 @@ def test_store_system_events(tmp_path):
     assert len(e)==1 and e[0]["event_type"]=="AI_PROVIDER_ERROR"
 
 
-def test_config_allows_approved_paid_model(monkeypatch):
+def test_config_forces_free_model(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY","test")
     monkeypatch.setenv("OPENROUTER_MODEL","nvidia/nemotron-3.5-lightning")
     monkeypatch.setenv("SHADOW_MODE","true")
@@ -42,18 +42,17 @@ def test_config_allows_approved_paid_model(monkeypatch):
     monkeypatch.setenv("HL_DATA_NETWORK","mainnet")
     from agent.config import load
     c=load()
-    assert c.model=="nvidia/nemotron-3.5-lightning"
+    assert c.model=="nvidia/nemotron-3.5-lightning:free"
 
-def test_config_rejects_unapproved_paid_model(monkeypatch):
+def test_config_replaces_unapproved_paid_model(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY","test")
     monkeypatch.setenv("OPENROUTER_MODEL","some/paid-model")
     monkeypatch.setenv("SHADOW_MODE","true")
     monkeypatch.setenv("EXECUTION_ENABLED","false")
     monkeypatch.setenv("HL_DATA_NETWORK","mainnet")
-    import pytest
     from agent.config import load
-    with pytest.raises(RuntimeError, match="MODEL LOCK"):
-        load()
+    c=load()
+    assert c.model=="nvidia/nemotron-3.5-lightning:free"
 
 
 def test_decision_contract_rejects_direction_with_zero_confidence():
@@ -94,7 +93,7 @@ def test_store_observer_is_separate_from_strategy(tmp_path):
     assert st.trades(10)==[]
     assert st.decisions(10)==[]
 
-def test_config_observer_defaults_enabled(monkeypatch):
+def test_config_observer_is_hard_disabled(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY","test")
     monkeypatch.setenv("OPENROUTER_MODEL","nvidia/nemotron-3.5-lightning")
     monkeypatch.setenv("SHADOW_MODE","true")
@@ -104,17 +103,39 @@ def test_config_observer_defaults_enabled(monkeypatch):
     monkeypatch.delenv("FAST_OBSERVER_INTERVAL_MINUTES",raising=False)
     from agent.config import load
     c=load()
-    assert c.observer_enabled is True
-    assert c.observer_minutes==15
+    assert c.observer_enabled is False
 
-def test_config_rejects_too_fast_observer(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY","test")
-    monkeypatch.setenv("OPENROUTER_MODEL","nvidia/nemotron-3.5-lightning")
-    monkeypatch.setenv("SHADOW_MODE","true")
-    monkeypatch.setenv("EXECUTION_ENABLED","false")
-    monkeypatch.setenv("HL_DATA_NETWORK","mainnet")
-    monkeypatch.setenv("FAST_OBSERVER_INTERVAL_MINUTES","5")
-    import pytest
-    from agent.config import load
-    with pytest.raises(RuntimeError, match="OBSERVER LOCK"):
-        load()
+
+
+def test_candidate_long_alignment():
+    from agent.candidate import detect_candidate
+    def tf(trend,close,ema21,rsi,ret3,ct=100):
+        return {"trend":trend,"close":close,"ema21":ema21,"rsi14":rsi,"ret3_pct":ret3,
+                "bar":{"close_time":ct}}
+    s={"timeframes":{
+        "5m":tf("UP",101,100,55,0.4),
+        "15m":tf("UP",102,100,58,0.5,200),
+        "1h":tf("UP",105,100,60,1.0),
+        "4h":tf("UP",110,100,62,2.0)}}
+    c=detect_candidate(s,None)
+    assert c and c.kind=="ENTRY" and c.side=="LONG"
+
+def test_candidate_requires_htf_alignment():
+    from agent.candidate import detect_candidate
+    def tf(trend,close,ema21,rsi,ret3,ct=100):
+        return {"trend":trend,"close":close,"ema21":ema21,"rsi14":rsi,"ret3_pct":ret3,
+                "bar":{"close_time":ct}}
+    s={"timeframes":{
+        "5m":tf("UP",101,100,55,0.4),
+        "15m":tf("UP",102,100,58,0.5,200),
+        "1h":tf("UP",105,100,60,1.0),
+        "4h":tf("DOWN",95,100,40,-2.0)}}
+    assert detect_candidate(s,None) is None
+
+def test_ai_daily_budget_is_hard_capped(tmp_path):
+    from agent.store import Store
+    st=Store(str(tmp_path),1000)
+    assert st.consume_ai_call("2026-10-31",2) is True
+    assert st.consume_ai_call("2026-10-31",2) is True
+    assert st.consume_ai_call("2026-10-31",2) is False
+    assert st.ai_calls("2026-10-31")==2

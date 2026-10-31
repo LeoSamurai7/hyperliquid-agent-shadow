@@ -1,25 +1,19 @@
-# HYPERLIQUID_AGENT_V1_2_LIVE_SHADOW
+# HYPERLIQUID_AGENT_V1_3_CANDIDATE_ONLY_FREE_AI
 
-این پروژه Runtime زنده Shadow است، نه بک‌تست.
+هدف این نسخه: حذف مصرف بی‌هدف AI و آماده‌سازی مستقیم برای Testnet execution.
 
-- داده واقعی Hyperliquid Mainnet
-- هیچ Order Placement ندارد
-- SHADOW_MODE=true و EXECUTION_ENABLED=false اجباری
-- مدل: nvidia/nemotron-3.5-lightning
-- هر 5 دقیقه: Market/Stop/TP مجازی
-- Lane رسمی: هر 60 دقیقه تصمیم AI = LONG/SHORT/HOLD/CLOSE و تنها Lane مجاز برای معامله مجازی
-- Fast Observer: هر 15 دقیقه تحلیل پژوهشی جداگانه؛ فقط hypothetical gate را ثبت می‌کند و هرگز openv/closev را صدا نمی‌زند
-- AI Output Hardening: JSON Schema + Pydantic contract + repair retry + provider routing
-- Risk Gate رسمی بدون تغییر: 0.25% ریسک، 1.5% سقف ضرر روزانه، Confidence>=75، RR>=1.5
-- SQLite: /data/shadow.db
-- Endpoints: /health, /state, /trades, /decisions, /observer, /events, /report
+- داده بازار: Hyperliquid Mainnet public
+- Market loop: هر 5 دقیقه
+- Observer پانزده‌دقیقه‌ای: خاموش و فقط تاریخچه V1.2 حفظ می‌شود
+- Signal Candidate Engine: قطعی و کم‌پارامتر؛ فقط وقتی HTF و momentum هم‌جهت باشند Candidate می‌سازد
+- AI: فقط روی Candidate صدا زده می‌شود، نه روی ساعت ثابت
+- مدل: nvidia/nemotron-3.5-lightning:free
+- OpenRouter output: Tool Calling اجباری با submit_trade_decision؛ response_format حذف شده
+- Retry: صفر؛ هر Candidate فقط یک API request. خطا = fail-closed / بدون معامله
+- سقف سخت AI: حداکثر 40 درخواست در روز UTC
+- Risk Gate بدون تغییر: 0.25% ریسک، Confidence>=75، RR>=1.5، سقف زیان روزانه 1.5%
+- Execution واقعی: هنوز در این build خاموش است
+- Mainnet execution: ممنوع
+- Endpoints: /health /state /trades /decisions /observer /events /report
 
-متغیرهای Observer به صورت پیش‌فرض:
-- FAST_OBSERVER_ENABLED=true
-- FAST_OBSERVER_INTERVAL_MINUTES=15
-- حداقل فاصله Observer در کد 10 دقیقه قفل شده است.
-
-Observer به هیچ عنوان جزو معاملات/تصمیم‌های رسمی Strategy شمرده نمی‌شود.
-معیار ارزیابی Strategy رسمی: حداقل 14 روز و حداقل 30 معامله بسته‌شده؛ هرکدام دیرتر.
-خطاهای Provider/Contract و Observer از آمار Strategy رسمی حذف می‌شوند.
-Mainnet execution مجاز نیست.
+مرحله بعد فقط V1.3 TESTNET EXECUTION VALIDATOR است. پژوهش Shadow جدید یا Observer جدید اضافه نمی‌شود.

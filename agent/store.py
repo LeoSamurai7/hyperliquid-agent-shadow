@@ -27,8 +27,7 @@ class Store:
               entry_price REAL,exit_price REAL,qty REAL,notional REAL,stop_price REAL,tp_price REAL,
               entry_fee REAL,exit_fee REAL,pnl REAL,r_multiple REAL,status TEXT,exit_reason TEXT,
               thesis TEXT,invalidation TEXT);
-            CREATE TABLE IF NOT EXISTS system_events(
-              id INTEGER PRIMARY KEY,ts_ms INTEGER,event_type TEXT,severity TEXT,payload TEXT);""")
+            CREATE TABLE IF NOT EXISTS system_events(\n              id INTEGER PRIMARY KEY,ts_ms INTEGER,event_type TEXT,severity TEXT,payload TEXT);\n            CREATE TABLE IF NOT EXISTS ai_usage(day TEXT PRIMARY KEY,calls INTEGER NOT NULL);""")
             if not c.execute("SELECT 1 FROM kv WHERE k='equity'").fetchone():
                 c.execute("INSERT INTO kv VALUES('equity',?)",(str(e),))
 
@@ -135,3 +134,19 @@ class Store:
         with self.conn() as c:
             c.execute("""UPDATE trades SET exit_ts=?,exit_price=?,exit_fee=?,pnl=?,r_multiple=?,status='CLOSED',exit_reason=? WHERE id=?""",
                       (ts,exitp,fee,pnl,r,reason,id))
+
+
+    def consume_ai_call(self,day,limit):
+        with self.conn() as c:
+            c.execute("INSERT OR IGNORE INTO ai_usage(day,calls) VALUES(?,0)",(day,))
+            r=c.execute("SELECT calls FROM ai_usage WHERE day=?",(day,)).fetchone()
+            calls=int(r["calls"])
+            if calls>=limit:
+                return False
+            c.execute("UPDATE ai_usage SET calls=calls+1 WHERE day=?",(day,))
+            return True
+
+    def ai_calls(self,day):
+        with self.conn() as c:
+            r=c.execute("SELECT calls FROM ai_usage WHERE day=?",(day,)).fetchone()
+        return int(r["calls"]) if r else 0
