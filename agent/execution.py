@@ -108,6 +108,129 @@ class TestnetExecution:
             self.last_error=err
             return {"ok":True,"status":"SUBMITTED_UNRECONCILED","error":err}
 
+    def test_roundtrip(self,mark,ts,side="LONG",notional_usd=12.0):
+        """One-shot TESTNET execution proof: bracket entry -> fill -> reduce-only flat."""
+        pf=self.preflight()
+        if self.c.execution_target!="testnet" or pf.get("target")!="testnet":
+            return {"ok":False,"status":"TESTNET_ONLY_BLOCKED","preflight":pf}
+        if not self.c.execution or not pf.get("ok"):
+            return {"ok":False,"status":"PREFLIGHT_BLOCKED","preflight":pf}
+
+        existing=self.st.getkv("v143_test_trigger_state",None)
+        if isinstance(existing,dict) and existing.get("started"):
+            return {"ok":False,"status":"ONE_SHOT_ALREADY_USED","previous":existing}
+
+        side=str(side).upper()
+        if side not in {"LONG","SHORT"}:
+            return {"ok":False,"status":"INVALID_SIDE"}
+
+        risk=self.signer.risk()
+        gate=(risk or {}).get("risk_gate") or {}
+        server_cap=float(gate.get("max_notional_usd") or 0) or self.c.max_testnet_notional_usd
+        cap=min(float(notional_usd),float(self.c.max_testnet_notional_usd),server_cap)
+        cap=max(10.5,cap)
+        qty=self._floor_btc_qty((cap*0.98)/float(mark))
+        max_size=float((gate.get("max_size") or {}).get(self.c.symbol,0) or 0)
+        if max_size>0: qty=min(qty,max_size)
+        if qty<0.00001:
+            return {"ok":False,"status":"QTY_TOO_SMALL","qty":qty,"cap":cap}
+
+        fp=f"TESTNET_ROUNDTRIP:{int(ts)}"
+        state={"started":True,"ts_ms":int(ts),"fingerprint":fp,"side":side,
+               "requested_notional_usd":float(notional_usd),"qty":qty,"mark":float(mark),
+               "status":"STARTED"}
+        self.st.setkv("v143_test_trigger_state",state)
+        self.st.event(ts,"TEST_TRIGGER_STARTED",state,severity="INFO")
+
+        sl=0.01
+        tp=0.02
+        stop=mark*(1-sl) if side=="LONG" else mark*(1+sl)
+        target=mark*(1+tp) if side=="LONG" else mark*(1-tp)
+
+        try:
+            submit=self.signer.place_bracket(
+                self.c.symbol,side=="LONG",qty,mark,stop,target)
+            self.st.event(ts,"TEST_TRIGGER_ORDER_SENT",
+                          {"fingerprint":fp,"submit":submit,"qty":qty,"side":side},
+                          severity="INFO")
+        except Exception as e:
+            err=f"{type(e).__name__}: {e}"
+            state.update({"status":"ENTRY_ERROR","error":err})
+            self.st.setkv("v143_test_trigger_state",state)
+            self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
+            self.last_error=err
+            return {"ok":False,**state}
+
+        time.sleep(1.2)
+        try:
+            snap=self.signer.snapshot()
+            pos=self._position_from_snapshot(snap)
+            fills=self.signer.fills(self.c.symbol,20)
+            recent=[x for x in (fills.get("fills") or [])
+                    if int(x.get("time_ms") or 0)>=int(ts)-5000]
+        except Exception as e:
+            err=f"{type(e).__name__}: {e}"
+            state.update({"status":"ENTRY_RECONCILE_ERROR","error":err})
+            self.st.setkv("v143_test_trigger_state",state)
+            self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
+            self.last_error=err
+            return {"ok":False,**state}
+
+        entry_evidence=bool(pos or recent)
+        self.st.event(ts,"TEST_TRIGGER_FILL_CHECK",
+                      {"fingerprint":fp,"position":pos,"recent_fills":recent[:6],
+                       "entry_evidence":entry_evidence},
+                      severity="INFO" if entry_evidence else "WARN")
+        if not entry_evidence:
+            state.update({"status":"NO_ENTRY_FILL","recent_fills":recent[:6]})
+            self.st.setkv("v143_test_trigger_state",state)
+            self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
+            return {"ok":False,**state}
+
+        try:
+            close=self.signer.close_testnet_position(self.c.symbol)
+            self.st.event(ts,"TEST_TRIGGER_CLOSE_SENT",
+                          {"fingerprint":fp,"close":close},severity="INFO")
+        except Exception as e:
+            err=f"{type(e).__name__}: {e}"
+            state.update({"status":"CLOSE_ERROR","error":err})
+            self.st.setkv("v143_test_trigger_state",state)
+            self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
+            self.last_error=err
+            return {"ok":False,**state}
+
+        time.sleep(1.0)
+        try:
+            snap2=self.signer.snapshot()
+            pos2=self._position_from_snapshot(snap2)
+            fills2=self.signer.fills(self.c.symbol,30)
+            recent2=[x for x in (fills2.get("fills") or [])
+                     if int(x.get("time_ms") or 0)>=int(ts)-5000]
+        except Exception as e:
+            err=f"{type(e).__name__}: {e}"
+            state.update({"status":"FINAL_RECONCILE_ERROR","error":err})
+            self.st.setkv("v143_test_trigger_state",state)
+            self.st.event(ts,"TEST_TRIGGER_FAILED",state,severity="ERROR")
+            self.last_error=err
+            return {"ok":False,**state}
+
+        flat=(pos2 is None)
+        state.update({
+            "status":"PASS" if flat else "POSITION_REMAINS",
+            "entry_evidence":entry_evidence,
+            "close_result":close,
+            "final_position":pos2,
+            "recent_fills":recent2[:10],
+            "finished_ms":int(time.time()*1000),
+        })
+        self.st.setkv("v143_test_trigger_state",state)
+        self.st.event(ts,
+                      "TEST_TRIGGER_PASS" if flat else "TEST_TRIGGER_FAILED",
+                      state,severity="INFO" if flat else "ERROR")
+        self.last_reconcile={"status":state["status"],"position":pos2}
+        self.last_error=None if flat else "POSITION_REMAINS_AFTER_TEST_CLOSE"
+        return {"ok":flat,**state}
+
     def reconcile(self):
         if not self.c.execution:return None
         latest=self.st.execution_latest()
