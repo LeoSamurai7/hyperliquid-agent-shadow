@@ -192,7 +192,7 @@ def test_ai_smoke_pass_uses_same_model_and_forces_hold():
                 "choices":[{"finish_reason":"tool_calls","native_finish_reason":"tool_calls",
                             "message":{"tool_calls":[{"function":{
                                 "name":"submit_trade_decision",
-                                "arguments":"{\\\"action\\\":\\\"HOLD\\\",\\\"confidence\\\":0,\\\"stop_loss_pct\\\":null,\\\"take_profit_pct\\\":null,\\\"thesis\\\":\\\"smoke ok\\\",\\\"invalidation\\\":\\\"N/A\\\",\\\"horizon_hours\\\":1}"
+                                "arguments":'{"action":"HOLD","confidence":0,"stop_loss_pct":null,"take_profit_pct":null,"thesis":"smoke ok","invalidation":"N/A","horizon_hours":1}'
                             }}]}}]
             }
     class Sess:
