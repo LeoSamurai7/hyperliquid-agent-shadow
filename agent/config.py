@@ -17,7 +17,7 @@ class Config:
     equity:float; risk_pct:float; daily_loss_pct:float; max_notional_pct:float
     min_conf:int; max_trades_day:int; min_stop_pct:float; max_stop_pct:float; min_rr:float
     fee_bps:float; slippage_bps:float; loop_seconds:int; ai_daily_limit:int
-    observer_enabled:bool; data_dir:str; kill:bool
+    observer_enabled:bool; data_dir:str; kill:bool; signer_base_url:str; signer_token:str
 
 def load():
     requested=os.getenv("OPENROUTER_MODEL",FREE_MODEL).strip()
@@ -36,7 +36,9 @@ def load():
       f("FEE_BPS_PER_SIDE",4.5),f("SLIPPAGE_BPS_PER_SIDE",1.0),
       i("MARKET_LOOP_SECONDS",300),daily_limit,
       False,
-      os.getenv("DATA_DIR","/data"),b("KILL_SWITCH",False))
+      os.getenv("DATA_DIR","/data"),b("KILL_SWITCH",False),
+      os.getenv("HL_SIGNER_BASE_URL","https://hl-n8n-signer-production.up.railway.app").rstrip("/"),
+      os.getenv("HL_SIGNER_TOKEN","").strip())
     if not c.shadow: raise RuntimeError("SHADOW_MODE must be true")
     if c.execution: raise RuntimeError("HARD LOCK: V1.3 shadow build keeps EXECUTION_ENABLED=false")
     if not c.model.endswith(":free"): raise RuntimeError("FREE MODEL LOCK")
