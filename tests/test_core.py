@@ -139,3 +139,12 @@ def test_ai_daily_budget_is_hard_capped(tmp_path):
     assert st.consume_ai_call("2026-10-31",2) is True
     assert st.consume_ai_call("2026-10-31",2) is False
     assert st.ai_calls("2026-10-31")==2
+
+
+def test_signer_config_defaults(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY","x")
+    monkeypatch.delenv("HL_SIGNER_TOKEN",raising=False)
+    from agent.config import load
+    c=load()
+    assert c.signer_base_url=="https://hl-n8n-signer-production.up.railway.app"
+    assert c.signer_token==""
