@@ -116,7 +116,7 @@ class TestnetExecution:
         if not self.c.execution or not pf.get("ok"):
             return {"ok":False,"status":"PREFLIGHT_BLOCKED","preflight":pf}
 
-        existing=self.st.getkv("v143_test_trigger_state",None)
+        existing=self.st.getkv("v144_test_trigger_state",None)
         if isinstance(existing,dict) and existing.get("started"):
             return {"ok":False,"status":"ONE_SHOT_ALREADY_USED","previous":existing}
 
