@@ -31,8 +31,8 @@ class Runtime:
         ts=(self.snap or {}).get("ts_ms")
         day=self._day(ts or int(time.time()*1000))
         return {
-            "version":"1.4.2",
-            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY_SMOKE_V2",
+            "version":"1.4.3",
+            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY_E2E",
             "execution_enabled":bool(self.c.execution),
             "execution_target":self.c.execution_target,
             "max_testnet_notional_usd":self.c.max_testnet_notional_usd,
@@ -48,6 +48,21 @@ class Runtime:
             "last_execution_reconcile":self.exec.last_reconcile,
             "last_snapshot_ts":ts
         }
+
+    def testnet_trigger(self,confirm):
+        if confirm!="TESTNET_ONLY_143":
+            return {"ok":False,"status":"CONFIRMATION_REQUIRED"}
+        if self.c.execution_target!="testnet":
+            return {"ok":False,"status":"TESTNET_ONLY_BLOCKED"}
+        if not self.snap:
+            try:
+                snap,_=snapshot(self.m)
+                self.snap=snap
+            except Exception as e:
+                return {"ok":False,"status":"SNAPSHOT_ERROR","error":f"{type(e).__name__}: {e}"}
+        ts=int(time.time()*1000)
+        mark=float(self.snap["mark_price"])
+        return self.exec.test_roundtrip(mark,ts,side="LONG",notional_usd=12.0)
 
     def ai_smoke(self,cache_seconds=300):
         now=int(time.time()*1000)
