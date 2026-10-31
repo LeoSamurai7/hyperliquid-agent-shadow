@@ -31,8 +31,8 @@ class Runtime:
         ts=(self.snap or {}).get("ts_ms")
         day=self._day(ts or int(time.time()*1000))
         return {
-            "version":"1.4.1",
-            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY_SMOKE",
+            "version":"1.4.2",
+            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY_SMOKE_V2",
             "execution_enabled":bool(self.c.execution),
             "execution_target":self.c.execution_target,
             "max_testnet_notional_usd":self.c.max_testnet_notional_usd,
@@ -51,7 +51,7 @@ class Runtime:
 
     def ai_smoke(self,cache_seconds=300):
         now=int(time.time()*1000)
-        cached=self.st.getkv("v141_last_ai_smoke",None)
+        cached=self.st.getkv("v142_last_ai_smoke",None)
         if isinstance(cached,dict) and now-int(cached.get("ts_ms",0) or 0) < int(cache_seconds)*1000:
             out=dict(cached); out["cached"]=True
             return out
