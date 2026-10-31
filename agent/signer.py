@@ -70,3 +70,6 @@ class SignerClient:
             "entry_price":float(entry_price),"stop_loss":float(stop_loss),
             "take_profit":float(take_profit)
         },timeout=30)
+
+    def close_testnet_position(self,coin):
+        return self._post("/close_testnet_position",{"coin":coin},timeout=30)
