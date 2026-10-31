@@ -31,8 +31,8 @@ class Runtime:
         ts=(self.snap or {}).get("ts_ms")
         day=self._day(ts or int(time.time()*1000))
         return {
-            "version":"1.4.4",
-            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY_E2E_V2",
+            "version":"1.5.0",
+            "architecture":"NATURAL_CANDIDATE_AI_TESTNET_TRANSPORT",
             "execution_enabled":bool(self.c.execution),
             "execution_target":self.c.execution_target,
             "max_testnet_notional_usd":self.c.max_testnet_notional_usd,
