@@ -16,7 +16,7 @@ jobs:
           set -euo pipefail
           BASE="https://hyperliquid-agent-shadow-production.up.railway.app"
           echo "Calling guarded TESTNET-only one-shot trigger..."
-          curl --retry 4 --retry-delay 5 --retry-all-errors --fail-with-body             -X POST "$BASE/execution/test-trigger?confirm=TESTNET_ONLY_143"             -o trigger.json
+          curl --retry 4 --retry-delay 5 --retry-all-errors --fail-with-body             -X POST "$BASE/execution/test-trigger?confirm=TESTNET_ONLY_144"             -o trigger.json
           cat trigger.json
           python - <<'PY'
           import json
