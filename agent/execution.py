@@ -70,10 +70,18 @@ class TestnetExecution:
         target=mark*(1+tp) if cand.side=="LONG" else mark*(1-tp)
 
         try:
-            result=self.signer.place_bracket(
-                self.c.symbol,cand.side=="LONG",qty,mark,stop,target)
+            result=self.signer.place_transport_bracket(
+                self.c.symbol,
+                cand.side=="LONG",
+                qty,
+                mark,
+                float(d.stop_loss_pct),
+                float(d.take_profit_pct)
+            )
             payload={"candidate":cand.__dict__,"strategy":{
-                "entry":mark,"stop":stop,"target":target,"qty":qty},
+                "mainnet_entry":mark,"mainnet_stop":stop,"mainnet_target":target,"qty":qty},
+                "execution_mode":"TESTNET_TRANSPORT_VALIDATION",
+                "representative_forward_pnl":False,
                 "signer_result":result}
             self.st.execution_finish(cand.fingerprint,"SUBMITTED",payload)
         except Exception as e:
