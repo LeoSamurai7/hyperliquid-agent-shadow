@@ -1,39 +1,23 @@
 {
-  "project": "HYPERLIQUID_AGENT_V1_3_CANDIDATE_ONLY_FREE_AI",
-  "version": "1.3.0",
+  "project": "HYPERLIQUID_AGENT_V1_4_TESTNET_EXECUTION_VALIDATOR",
+  "version": "1.4.0",
   "deadline": "2026-11-02",
-  "mode": "SHADOW_SIGNAL_VALIDATION",
+  "mode": "SHADOW_TESTNET_VALIDATOR",
   "market_data": "Hyperliquid Mainnet public",
-  "symbol": "BTC",
-  "execution_enabled": false,
+  "execution_target": "Hyperliquid Testnet only",
   "mainnet_execution": "FORBIDDEN",
-  "model": "nvidia/nemotron-3.5-lightning:free",
-  "ai_architecture": {
-    "trigger": "candidate_only",
-    "output": "forced tool call submit_trade_decision",
-    "retries": 0,
-    "daily_call_cap": 40,
-    "observer": false,
-    "fail_closed": true
-  },
-  "candidate_engine": {
-    "entry": "1h and 4h trend aligned; lower-TF confirmation; price/EMA21, RSI and 3-bar momentum filters",
-    "position_review": "AI only on adverse 1h/4h structure; hard virtual SL/TP continues every market loop",
-    "fingerprint": "one call per candidate per closed 15m bar"
-  },
-  "risk": {
-    "risk_per_trade_pct": 0.25,
-    "max_daily_loss_pct": 1.5,
-    "max_trades_per_day": 6,
-    "min_confidence": 75,
-    "stop_pct_range": [
-      0.4,
-      4
-    ],
-    "min_reward_risk": 1.5,
-    "fee_bps_per_side": 4.5,
-    "slippage_bps": 1
-  },
-  "preserved_history": "V1.2 decisions/observer/trades retained in same SQLite DB",
-  "next_gate": "Testnet execution validation; no additional strategy-research gate before wiring execution"
+  "execution_default": false,
+  "execution_requirements": [
+    "Agent EXECUTION_ENABLED=true",
+    "Signer HL_EXECUTION_ENABLED=true",
+    "Signer health network=testnet",
+    "Signer kill_switch=false"
+  ],
+  "order_path": "Candidate -> Free AI -> Risk Gate -> Signer bracket -> Testnet -> read-only reconcile",
+  "idempotency": "one execution attempt per candidate fingerprint",
+  "retries": "no order retry",
+  "max_testnet_notional_usd": 25,
+  "signer_server_cap_usd": 100,
+  "exits": "exchange-side TP/SL bracket; no discretionary agent close in V1.4",
+  "next_gate": "Explicit user approval to arm both Agent and Signer for Testnet"
 }

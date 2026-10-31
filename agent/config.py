@@ -17,7 +17,7 @@ class Config:
     equity:float; risk_pct:float; daily_loss_pct:float; max_notional_pct:float
     min_conf:int; max_trades_day:int; min_stop_pct:float; max_stop_pct:float; min_rr:float
     fee_bps:float; slippage_bps:float; loop_seconds:int; ai_daily_limit:int
-    observer_enabled:bool; data_dir:str; kill:bool; signer_base_url:str; signer_token:str
+    observer_enabled:bool; data_dir:str; kill:bool; signer_base_url:str; signer_token:str; execution_target:str; max_testnet_notional_usd:float
 
 def load():
     requested=os.getenv("OPENROUTER_MODEL",FREE_MODEL).strip()
@@ -38,10 +38,15 @@ def load():
       False,
       os.getenv("DATA_DIR","/data"),b("KILL_SWITCH",False),
       os.getenv("HL_SIGNER_BASE_URL","https://hl-n8n-signer-production.up.railway.app").rstrip("/"),
-      os.getenv("HL_SIGNER_TOKEN","").strip())
+      os.getenv("HL_SIGNER_TOKEN","").strip(),
+      os.getenv("HL_EXECUTION_TARGET","testnet").strip().lower(),
+      min(max(f("MAX_TESTNET_NOTIONAL_USD",25.0),10.0),25.0))
     if not c.shadow: raise RuntimeError("SHADOW_MODE must be true")
-    if c.execution: raise RuntimeError("HARD LOCK: V1.3 shadow build keeps EXECUTION_ENABLED=false")
+    if c.execution and c.execution_target!="testnet":
+        raise RuntimeError("EXECUTION_TARGET must be testnet")
+    if c.execution and not c.signer_token:
+        raise RuntimeError("HL_SIGNER_TOKEN required for Testnet execution")
     if not c.model.endswith(":free"): raise RuntimeError("FREE MODEL LOCK")
-    if c.network!="mainnet": raise RuntimeError("V1.3 signal validation uses Hyperliquid mainnet PUBLIC DATA only")
+    if c.network!="mainnet": raise RuntimeError("V1.4 uses Hyperliquid mainnet PUBLIC DATA only")
     if not c.api_key: raise RuntimeError("OPENROUTER_API_KEY missing")
     return c

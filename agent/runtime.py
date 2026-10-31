@@ -5,11 +5,13 @@ from .ai import Trader
 from .candidate import detect_candidate
 from .risk import entry_gate
 from .virtual import openv,closev,stops
+from .execution import TestnetExecution
 
 class Runtime:
     def __init__(self,c,st):
         self.c=c; self.st=st; self.m=Market(c.symbol)
         self.ai=Trader(c.api_key,c.base_url,c.model)
+        self.exec=TestnetExecution(c,st)
         self.stop=threading.Event()
         self.last_attempt=int(st.getkv("v13_last_ai_attempt_ms",0) or 0)
         self.last_success=int(st.getkv("v13_last_ai_success_ms",0) or 0)
@@ -19,17 +21,21 @@ class Runtime:
     def _day(self,ts):
         return datetime.fromtimestamp(ts/1000,timezone.utc).strftime("%Y-%m-%d")
 
-    def risk(self):
+    def risk(self,equity_override=None):
         x=self.st.stats()
-        x.update({"equity":self.st.equity(),"risk_per_trade_pct":self.c.risk_pct,"kill_switch":self.c.kill})
+        x.update({"equity":float(equity_override if equity_override is not None else self.st.equity()),
+                  "risk_per_trade_pct":self.c.risk_pct,"kill_switch":self.c.kill})
         return x
 
     def status(self):
         ts=(self.snap or {}).get("ts_ms")
         day=self._day(ts or int(time.time()*1000))
         return {
-            "version":"1.3.0",
-            "architecture":"CANDIDATE_ONLY_FREE_AI",
+            "version":"1.4.0",
+            "architecture":"CANDIDATE_ONLY_FREE_AI_TESTNET_READY",
+            "execution_enabled":bool(self.c.execution),
+            "execution_target":self.c.execution_target,
+            "max_testnet_notional_usd":self.c.max_testnet_notional_usd,
             "last_ai_attempt_ms":self.last_attempt,
             "last_ai_success_ms":self.last_success,
             "last_candidate_fingerprint":self.last_candidate,
@@ -38,6 +44,8 @@ class Runtime:
             "observer_enabled":False,
             "last_runtime_error":self.err,
             "last_ai_error":self.ai_err,
+            "last_execution_error":self.exec.last_error,
+            "last_execution_reconcile":self.exec.last_reconcile,
             "last_snapshot_ts":ts
         }
 
@@ -64,25 +72,38 @@ class Runtime:
         self.ai_err=None
         ok=False; reason="HOLD"
         if p:
-            if d.action=="CLOSE":
+            # In V1.4 Testnet mode an open exchange position is managed by
+            # the exchange-side bracket. No discretionary close endpoint is used.
+            reason="BRACKET_MANAGED_POSITION" if self.c.execution else "POSITION_HOLD"
+            if (not self.c.execution) and d.action=="CLOSE":
                 closev(self.st,p,mark,self.c,ts,"AI_CLOSE")
                 ok=True; reason="AI_CLOSE"
-            else:
-                reason="POSITION_HOLD"
         else:
             if d.action in {"LONG","SHORT"}:
                 if d.action!=cand.side:
                     reason="CANDIDATE_MISMATCH"
                 else:
-                    g=entry_gate(d,mark,self.st.equity(),rs["daily_pnl"],rs["trades_today"],self.c)
-                    ok=g.ok; reason=g.reason
-                    if ok: openv(self.st,d.action,mark,g,d,self.c,ts)
+                    g=entry_gate(d,mark,rs["equity"],rs["daily_pnl"],rs["trades_today"],self.c)
+                    if g.ok:
+                        if self.c.execution:
+                            ex=self.exec.place(cand,d,g,mark,ts)
+                            ok=bool(ex.get("ok"))
+                            reason="TESTNET_"+str(ex.get("status","UNKNOWN"))
+                            self.st.event(ts,"TESTNET_EXECUTION_RESULT",
+                                          {"candidate":cand.__dict__,"result":ex},
+                                          severity="INFO" if ok else "WARN")
+                        else:
+                            ok=True; reason="APPROVED"
+                            openv(self.st,d.action,mark,g,d,self.c,ts)
+                    else:
+                        reason=g.reason
             else:
                 reason="AI_VETO_HOLD"
 
         self.st.decision(ts,d,ok,reason,{
             "meta":meta,"mark":mark,"risk":rs,
-            "lane":"CANDIDATE_ONLY","candidate":cand.__dict__
+            "lane":"CANDIDATE_ONLY","candidate":cand.__dict__,
+            "execution_enabled":bool(self.c.execution)
         })
         self.last_success=ts
         self.st.setkv("v13_last_ai_success_ms",ts)
@@ -91,22 +112,28 @@ class Runtime:
         snap,raw=snapshot(self.m)
         self.snap=snap
         ts=snap["ts_ms"]; mark=snap["mark_price"]
-        p=self.st.position()
 
-        if p:
-            stops(self.st,p,raw["5m"].iloc[-1],self.c)
+        if self.c.execution:
+            self.exec.reconcile()
+            p=self.exec.position()
+            # Do not generate another entry while a real Testnet position exists.
+            if p:
+                return
+        else:
             p=self.st.position()
+            if p:
+                stops(self.st,p,raw["5m"].iloc[-1],self.c)
+                p=self.st.position()
 
         cand=detect_candidate(snap,p)
-        if cand is None:
-            return
-        if cand.fingerprint==self.last_candidate:
-            return
+        if cand is None:return
+        if cand.fingerprint==self.last_candidate:return
 
         self.last_candidate=cand.fingerprint
         self.st.setkv("v13_last_candidate_fingerprint",cand.fingerprint)
         self.st.event(ts,"CANDIDATE_DETECTED",
-                      {"candidate":cand.__dict__,"mark":mark,"position_id":p.get("id") if p else None},
+                      {"candidate":cand.__dict__,"mark":mark,
+                       "execution_enabled":bool(self.c.execution)},
                       severity="INFO")
         self._run_ai(snap,p,self.risk(),ts,mark,cand)
 

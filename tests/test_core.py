@@ -148,3 +148,31 @@ def test_signer_config_defaults(monkeypatch):
     c=load()
     assert c.signer_base_url=="https://hl-n8n-signer-production.up.railway.app"
     assert c.signer_token==""
+
+
+def test_execution_target_must_be_testnet(monkeypatch):
+    import pytest
+    monkeypatch.setenv("OPENROUTER_API_KEY","x")
+    monkeypatch.setenv("EXECUTION_ENABLED","true")
+    monkeypatch.setenv("HL_SIGNER_TOKEN","x")
+    monkeypatch.setenv("HL_EXECUTION_TARGET","mainnet")
+    from agent.config import load
+    with pytest.raises(RuntimeError,match="testnet"):
+        load()
+
+def test_execution_notional_hard_cap(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY","x")
+    monkeypatch.setenv("EXECUTION_ENABLED","false")
+    monkeypatch.setenv("MAX_TESTNET_NOTIONAL_USD","999")
+    from agent.config import load
+    c=load()
+    assert c.max_testnet_notional_usd==25.0
+
+def test_execution_journal_idempotency(tmp_path):
+    from agent.store import Store
+    st=Store(str(tmp_path),1000)
+    assert st.execution_begin(1,"fp","LONG",0.001,{"x":1}) is True
+    assert st.execution_begin(2,"fp","LONG",0.001,{"x":2}) is False
+    st.execution_finish("fp","OPEN",{"ok":True})
+    x=st.execution_latest()
+    assert x["fingerprint"]=="fp" and x["status"]=="OPEN"

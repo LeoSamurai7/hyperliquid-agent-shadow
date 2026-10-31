@@ -7,7 +7,7 @@ from agent.runtime import Runtime
 from agent.signer import SignerClient
 
 c=load(); st=Store(c.data_dir,c.equity); rt=Runtime(c,st); signer=SignerClient(c.signer_base_url,c.signer_token)
-app=FastAPI(title="Hyperliquid Agent V1.3 Candidate-Only Free AI")
+app=FastAPI(title="Hyperliquid Agent V1.4 Testnet Execution Validator")
 
 @app.on_event("startup")
 def start(): threading.Thread(target=rt.loop,daemon=True).start()
@@ -19,15 +19,22 @@ def stop(): rt.stop.set()
 def health():
     s=rt.status()
     return {"ok":s["last_runtime_error"] is None,
-            "mode":"SHADOW","execution_enabled":False,
+            "mode":"SHADOW_TESTNET_VALIDATOR","execution_enabled":bool(c.execution),
             "coin":c.symbol,"model":c.model,"runtime":s}
 
 @app.get("/execution/health")
 def execution_health():
     x=signer.health()
-    x["agent_execution_enabled"]=False
-    x["mode"]="READ_ONLY_PREFLIGHT"
+    x["agent_execution_enabled"]=bool(c.execution)
+    x["mode"]="TESTNET_ARMED" if c.execution else "READ_ONLY_PREFLIGHT"
     return x
+
+@app.get("/execution/state")
+def execution_state():
+    return {"preflight":rt.exec.preflight(),
+            "latest":st.execution_latest(),
+            "attempts":st.execution_attempts(10),
+            "runtime":rt.status()}
 
 @app.get("/state")
 def state():
@@ -55,7 +62,7 @@ def report():
     x=st.recent(500); wins=sum(1 for t in x if (t.get("pnl") or 0)>0)
     now=int(time.time()*1000)
     day=datetime.fromtimestamp(now/1000,timezone.utc).strftime("%Y-%m-%d")
-    return {"version":"1.3.0","starting_equity":c.equity,"current_equity":st.equity(),
+    return {"version":"1.4.0","starting_equity":c.equity,"current_equity":st.equity(),
             "closed_trades":len(x),"wins":wins,"win_rate":wins/len(x) if x else None,
             "realized_pnl":sum(float(t.get("pnl") or 0) for t in x),
             "today":st.stats(),"position":st.position(),

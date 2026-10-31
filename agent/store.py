@@ -27,7 +27,10 @@ class Store:
               entry_price REAL,exit_price REAL,qty REAL,notional REAL,stop_price REAL,tp_price REAL,
               entry_fee REAL,exit_fee REAL,pnl REAL,r_multiple REAL,status TEXT,exit_reason TEXT,
               thesis TEXT,invalidation TEXT);
-            CREATE TABLE IF NOT EXISTS system_events(\n              id INTEGER PRIMARY KEY,ts_ms INTEGER,event_type TEXT,severity TEXT,payload TEXT);\n            CREATE TABLE IF NOT EXISTS ai_usage(day TEXT PRIMARY KEY,calls INTEGER NOT NULL);""")
+            CREATE TABLE IF NOT EXISTS system_events(\n              id INTEGER PRIMARY KEY,ts_ms INTEGER,event_type TEXT,severity TEXT,payload TEXT);\n            CREATE TABLE IF NOT EXISTS ai_usage(day TEXT PRIMARY KEY,calls INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS execution_attempts(
+              id INTEGER PRIMARY KEY,ts_ms INTEGER,fingerprint TEXT UNIQUE,side TEXT,qty REAL,
+              status TEXT,payload TEXT,updated_ms INTEGER);""")
             if not c.execute("SELECT 1 FROM kv WHERE k='equity'").fetchone():
                 c.execute("INSERT INTO kv VALUES('equity',?)",(str(e),))
 
@@ -150,3 +153,31 @@ class Store:
         with self.conn() as c:
             r=c.execute("SELECT calls FROM ai_usage WHERE day=?",(day,)).fetchone()
         return int(r["calls"]) if r else 0
+
+
+    def execution_begin(self,ts,fingerprint,side,qty,payload):
+        try:
+            with self.conn() as c:
+                c.execute("""INSERT INTO execution_attempts
+                    (ts_ms,fingerprint,side,qty,status,payload,updated_ms)
+                    VALUES(?,?,?,?,?,?,?)""",
+                    (int(ts),fingerprint,side,float(qty),"STARTED",json.dumps(payload),int(time.time()*1000)))
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def execution_finish(self,fingerprint,status,payload):
+        with self.conn() as c:
+            c.execute("""UPDATE execution_attempts SET status=?,payload=?,updated_ms=?
+                         WHERE fingerprint=?""",
+                      (status,json.dumps(payload),int(time.time()*1000),fingerprint))
+
+    def execution_attempts(self,n=50):
+        with self.conn() as c:
+            rows=c.execute("SELECT * FROM execution_attempts ORDER BY id DESC LIMIT ?",(n,)).fetchall()
+        return [dict(x) for x in rows]
+
+    def execution_latest(self):
+        with self.conn() as c:
+            r=c.execute("SELECT * FROM execution_attempts ORDER BY id DESC LIMIT 1").fetchone()
+        return dict(r) if r else None
