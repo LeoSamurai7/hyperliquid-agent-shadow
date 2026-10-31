@@ -149,7 +149,6 @@ class Trader:
         started=time.perf_counter()
         try:
             body=self._body(user)
-            body["max_tokens"]=250
             r=self.s.post(
                 self.base+"/chat/completions",
                 headers={"Authorization":f"Bearer {self.key}","Content-Type":"application/json"},
