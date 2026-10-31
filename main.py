@@ -4,8 +4,9 @@ from fastapi import FastAPI
 from agent.config import load
 from agent.store import Store
 from agent.runtime import Runtime
+from agent.signer import SignerClient
 
-c=load(); st=Store(c.data_dir,c.equity); rt=Runtime(c,st)
+c=load(); st=Store(c.data_dir,c.equity); rt=Runtime(c,st); signer=SignerClient(c.signer_base_url,c.signer_token)
 app=FastAPI(title="Hyperliquid Agent V1.3 Candidate-Only Free AI")
 
 @app.on_event("startup")
@@ -20,6 +21,13 @@ def health():
     return {"ok":s["last_runtime_error"] is None,
             "mode":"SHADOW","execution_enabled":False,
             "coin":c.symbol,"model":c.model,"runtime":s}
+
+@app.get("/execution/health")
+def execution_health():
+    x=signer.health()
+    x["agent_execution_enabled"]=False
+    x["mode"]="READ_ONLY_PREFLIGHT"
+    return x
 
 @app.get("/state")
 def state():
