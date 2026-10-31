@@ -71,5 +71,10 @@ class SignerClient:
             "take_profit":float(take_profit)
         },timeout=30)
 
+    def testnet_smoke_bracket(self,coin="BTC",notional_usd=12.0,is_buy=True):
+        return self._post("/testnet_smoke_bracket",{
+            "coin":coin,"notional_usd":float(notional_usd),"is_buy":bool(is_buy)
+        },timeout=30)
+
     def close_testnet_position(self,coin):
         return self._post("/close_testnet_position",{"coin":coin},timeout=30)
