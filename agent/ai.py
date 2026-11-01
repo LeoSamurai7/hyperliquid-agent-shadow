@@ -76,29 +76,78 @@ class Trader:
             "messages":[{"role":"system","content":SYS},{"role":"user","content":user}]
         }
 
+    def _compact_market(self,snap):
+        t=(snap or {}).get("timeframes") or {}
+        keep={}
+        for tf in ("5m","15m","1h","4h"):
+            x=t.get(tf) or {}
+            keep[tf]={
+                "close":x.get("close"),
+                "ema21":x.get("ema21"),
+                "ema55":x.get("ema55"),
+                "atr_pct":x.get("atr_pct"),
+                "rsi14":x.get("rsi14"),
+                "ret3_pct":x.get("ret3_pct"),
+                "ret12_pct":x.get("ret12_pct"),
+                "trend":x.get("trend")
+            }
+        ctx=(snap or {}).get("context") or {}
+        return {
+            "coin":(snap or {}).get("coin"),
+            "mark_price":(snap or {}).get("mark_price"),
+            "funding":ctx.get("funding"),
+            "open_interest":ctx.get("openInterest"),
+            "timeframes":keep
+        }
+
     def decide(self,snap,pos,risk,recent,candidate):
+        compact_recent=[]
+        for x in (recent or [])[-2:]:
+            compact_recent.append({
+                "side":x.get("side"),
+                "pnl":x.get("pnl"),
+                "r_multiple":x.get("r_multiple"),
+                "exit_reason":x.get("exit_reason")
+            })
         user=json.dumps({
             "candidate":candidate,
-            "market":snap,
-            "virtual_position":pos,
-            "risk":risk,
-            "recent_closed":recent[-3:]
+            "market":self._compact_market(snap),
+            "position":pos,
+            "risk":{
+                "equity":risk.get("equity"),
+                "daily_pnl":risk.get("daily_pnl"),
+                "trades_today":risk.get("trades_today"),
+                "risk_per_trade_pct":risk.get("risk_per_trade_pct"),
+                "kill_switch":risk.get("kill_switch")
+            },
+            "recent_closed":compact_recent
         },separators=(",",":"))
         r=None
         raw=""
         try:
-            r=self.s.post(
-                self.base+"/chat/completions",
-                headers={"Authorization":f"Bearer {self.key}","Content-Type":"application/json"},
-                json=self._body(user),timeout=60
-            )
-            r.raise_for_status()
-            data=r.json()
-            choice=data["choices"][0]
-            msg=choice.get("message") or {}
-            calls=msg.get("tool_calls") or []
+            data=None
+            choice=None
+            calls=[]
+            for attempt in range(2):
+                r=self.s.post(
+                    self.base+"/chat/completions",
+                    headers={"Authorization":f"Bearer {self.key}","Content-Type":"application/json"},
+                    json=self._body(user,retry=attempt==1),timeout=60
+                )
+                r.raise_for_status()
+                data=r.json()
+                choice=data["choices"][0]
+                msg=choice.get("message") or {}
+                calls=msg.get("tool_calls") or []
+                if calls:
+                    break
+                if attempt==0 and choice.get("finish_reason")=="length":
+                    continue
+                break
+
             if not calls:
                 raise ValueError("missing tool_call")
+
             fn=(calls[0].get("function") or {})
             if fn.get("name")!="submit_trade_decision":
                 raise ValueError("wrong tool_call")
