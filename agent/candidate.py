@@ -41,6 +41,55 @@ def _entry_side(snap,side):
         return False,"MOMENTUM_FILTER"
     return True,"MTF_TREND_MOMENTUM"
 
+
+def _pullback_side(snap,side):
+    t=snap["timeframes"]
+    m5,m15,h1,h4=t["5m"],t["15m"],t["1h"],t["4h"]
+    up=side=="LONG"
+    want="UP" if up else "DOWN"
+    opposite="DOWN" if up else "UP"
+
+    # Lane B: keep the 4h regime, allow 1h to be MIXED during a pullback,
+    # but never allow the 1h to be in the opposite trend.
+    if h4.get("trend")!=want:
+        return False,"H4_REGIME_MISMATCH"
+    if h1.get("trend")==opposite:
+        return False,"H1_OPPOSITE_TREND"
+    if m15.get("trend")!=want:
+        return False,"M15_REENTRY_NOT_CONFIRMED"
+
+    h4e=h4.get("ema21")
+    h1e55=h1.get("ema55")
+    if h4e is None or h1e55 is None:
+        return False,"EMA_MISSING"
+
+    if up and not (h4["close"]>h4e and h1["close"]>h1e55):
+        return False,"PULLBACK_STRUCTURE_NOT_READY"
+    if (not up) and not (h4["close"]<h4e and h1["close"]<h1e55):
+        return False,"PULLBACK_STRUCTURE_NOT_READY"
+
+    r1=_v(h1.get("rsi14"),50)
+    r4=_v(h4.get("rsi14"),50)
+    r15=_v(m15.get("rsi14"),50)
+    if up and not (38<=r1<=68 and 38<=r4<=70 and r15<72):
+        return False,"PULLBACK_RSI_FILTER"
+    if (not up) and not (32<=r1<=62 and 30<=r4<=62 and r15>28):
+        return False,"PULLBACK_RSI_FILTER"
+
+    lower_rets=[_v(x.get("ret3_pct"),0.0) for x in (m5,m15,h1)]
+    confirms=sum(1 for x in lower_rets if x>0) if up else sum(1 for x in lower_rets if x<0)
+    if confirms<2:
+        return False,"PULLBACK_MOMENTUM_FILTER"
+
+    m5ret=_v(m5.get("ret3_pct"),0.0)
+    if m5.get("trend")!=want:
+        if up and m5ret<=0:
+            return False,"M5_REENTRY_NOT_CONFIRMED"
+        if (not up) and m5ret>=0:
+            return False,"M5_REENTRY_NOT_CONFIRMED"
+
+    return True,"H4_REGIME_PULLBACK_REENTRY"
+
 def detect_candidate(snap,position):
     t=snap["timeframes"]
     m15=t["15m"]; h1=t["1h"]; h4=t["4h"]
@@ -56,8 +105,16 @@ def detect_candidate(snap,position):
             return Candidate("POSITION_REVIEW",side,"HTF_ADVERSE_REVIEW",f"REVIEW:{side}:{fpbar}")
         return None
 
+    # Lane A: original strict multi-timeframe alignment.
     for side in ("LONG","SHORT"):
         ok,reason=_entry_side(snap,side)
+        if ok:
+            return Candidate("ENTRY",side,reason,f"ENTRY:{side}:{fpbar}")
+
+    # Lane B: 4h-regime pullback/re-entry. This adds frequency without
+    # permitting counter-trend entries or bypassing AI/Risk gates.
+    for side in ("LONG","SHORT"):
+        ok,reason=_pullback_side(snap,side)
         if ok:
             return Candidate("ENTRY",side,reason,f"ENTRY:{side}:{fpbar}")
     return None
@@ -67,8 +124,14 @@ def candidate_diagnostics(snap):
     t=snap["timeframes"]
     out={}
     for side in ("LONG","SHORT"):
-        ok,reason=_entry_side(snap,side)
-        out[side]={"eligible":bool(ok),"reason":reason}
+        strict_ok,strict_reason=_entry_side(snap,side)
+        pull_ok,pull_reason=_pullback_side(snap,side)
+        out[side]={
+            "eligible":bool(strict_ok or pull_ok),
+            "path":"STRICT" if strict_ok else ("PULLBACK" if pull_ok else None),
+            "strict_reason":strict_reason,
+            "pullback_reason":pull_reason
+        }
     out["context"]={
         "5m_trend":t["5m"].get("trend"),
         "15m_trend":t["15m"].get("trend"),
