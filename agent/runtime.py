@@ -2,7 +2,7 @@ import threading,time
 from datetime import datetime,timezone
 from .market import Market,snapshot
 from .ai import Trader
-from .candidate import detect_candidate
+from .candidate import detect_candidate,candidate_diagnostics
 from .risk import entry_gate
 from .virtual import openv,closev,stops
 from .execution import TestnetExecution
@@ -31,8 +31,8 @@ class Runtime:
         ts=(self.snap or {}).get("ts_ms")
         day=self._day(ts or int(time.time()*1000))
         return {
-            "version":"1.5.0",
-            "architecture":"NATURAL_CANDIDATE_AI_TESTNET_TRANSPORT",
+            "version":"1.5.1",
+            "architecture":"NATURAL_CANDIDATE_AI_TESTNET_TRANSPORT_DIAGNOSTICS",
             "execution_enabled":bool(self.c.execution),
             "execution_target":self.c.execution_target,
             "max_testnet_notional_usd":self.c.max_testnet_notional_usd,
@@ -48,6 +48,20 @@ class Runtime:
             "last_execution_reconcile":self.exec.last_reconcile,
             "last_snapshot_ts":ts
         }
+
+    def candidate_status(self):
+        if not self.snap:
+            return {"ok":False,"status":"NO_SNAPSHOT"}
+        d=candidate_diagnostics(self.snap)
+        d.update({
+            "ok":True,
+            "exchange_position":self.exec.position() if self.c.execution else None,
+            "legacy_virtual_position":self.st.position(),
+            "last_candidate_fingerprint":self.last_candidate,
+            "last_ai_attempt_ms":self.last_attempt,
+            "last_ai_success_ms":self.last_success,
+        })
+        return d
 
     def testnet_trigger(self,confirm):
         if confirm!="TESTNET_ONLY_144":
