@@ -205,7 +205,7 @@ def test_ai_smoke_pass_uses_same_model_and_forces_hold():
     d,m=t.smoke()
     assert m["ok"] is True and d.action=="HOLD"
     assert t.s.body["model"]=="nvidia/nemotron-3.5-lightning:free"
-    assert t.s.body["max_tokens"]==700
+    assert t.s.body["max_tokens"]==620
 
 def test_ai_smoke_fail_does_not_expose_api_key():
     from agent.ai import Trader
