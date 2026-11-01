@@ -61,3 +61,32 @@ def detect_candidate(snap,position):
         if ok:
             return Candidate("ENTRY",side,reason,f"ENTRY:{side}:{fpbar}")
     return None
+
+
+def candidate_diagnostics(snap):
+    t=snap["timeframes"]
+    out={}
+    for side in ("LONG","SHORT"):
+        ok,reason=_entry_side(snap,side)
+        out[side]={"eligible":bool(ok),"reason":reason}
+    out["context"]={
+        "5m_trend":t["5m"].get("trend"),
+        "15m_trend":t["15m"].get("trend"),
+        "1h_trend":t["1h"].get("trend"),
+        "4h_trend":t["4h"].get("trend"),
+        "1h_close":t["1h"].get("close"),
+        "1h_ema21":t["1h"].get("ema21"),
+        "4h_close":t["4h"].get("close"),
+        "4h_ema21":t["4h"].get("ema21"),
+        "15m_rsi14":t["15m"].get("rsi14"),
+        "1h_rsi14":t["1h"].get("rsi14"),
+        "4h_rsi14":t["4h"].get("rsi14"),
+        "ret3_pct":{
+            "5m":t["5m"].get("ret3_pct"),
+            "15m":t["15m"].get("ret3_pct"),
+            "1h":t["1h"].get("ret3_pct"),
+            "4h":t["4h"].get("ret3_pct")
+        },
+        "15m_close_time":(t["15m"].get("bar") or {}).get("close_time")
+    }
+    return out
