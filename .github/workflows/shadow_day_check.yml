@@ -16,6 +16,9 @@ jobs:
           echo "=== HEALTH ==="
           curl --retry 4 --retry-delay 3 --retry-all-errors --fail-with-body "$BASE/health"
           echo
+          echo "=== AI_SMOKE ==="
+          curl --retry 4 --retry-delay 3 --retry-all-errors --fail-with-body "$BASE/ai/smoke"
+          echo
           echo "=== STATE ==="
           curl --retry 4 --retry-delay 3 --retry-all-errors --fail-with-body "$BASE/state"
           echo
