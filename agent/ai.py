@@ -29,19 +29,18 @@ class Decision(BaseModel):
             raise ValueError("CLOSE uses confidence 0")
         return self
 
-SYS="""You are the final decision layer of a crypto trading agent running in TEST/SHADOW mode.
-A deterministic signal engine has already emitted a candidate. You are a veto/confirmation layer, not a signal generator.
-Never place orders yourself.
+SYS="""You are the final veto/confirmation layer of a TEST/SHADOW crypto agent.
+Do not explain your reasoning in prose. Immediately call submit_trade_decision exactly once.
 
 Rules:
-- If candidate.kind=ENTRY and there is no open position: choose candidate.side or HOLD only. Never reverse it.
-- If candidate.kind=POSITION_REVIEW and a position is open: choose HOLD or CLOSE only.
+- ENTRY: choose candidate.side or HOLD only; never reverse.
+- POSITION_REVIEW: choose HOLD or CLOSE only.
 - Prefer HOLD when evidence is mixed.
-- Use only supplied market/risk/candidate data.
-- LONG/SHORT require confidence 1-100, positive stop_loss_pct and take_profit_pct, normally stop 0.4-4.0%, reward/risk >=1.5.
-- HOLD/CLOSE use confidence 0 and null stop/take-profit.
-- horizon_hours must be 1-168.
-Submit exactly one decision through the submit_trade_decision tool."""
+- Use only supplied data.
+- LONG/SHORT: confidence 1-100, SL/TP positive, stop normally 0.4-4.0%, RR >=1.5.
+- HOLD/CLOSE: confidence 0 and null SL/TP.
+- horizon_hours 1-168.
+Never place orders yourself."""
 
 SCHEMA={"type":"object","properties":{
     "action":{"type":"string","enum":["LONG","SHORT","HOLD","CLOSE"]},
@@ -58,12 +57,12 @@ class Trader:
     def __init__(self,key,base,model):
         self.key=key; self.base=base; self.model=model; self.s=requests.Session()
 
-    def _body(self,user):
+    def _body(self,user,retry=False):
         return {
             "model":self.model,
-            "temperature":0.10,
-            "max_tokens":700,
-            "reasoning":{"effort":"low"},
+            "temperature":0.05,
+            "max_tokens":520 if retry else 620,
+            "reasoning":{"max_tokens":64 if retry else 128,"exclude":True},
             "tools":[{
                 "type":"function",
                 "function":{
