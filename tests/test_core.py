@@ -222,3 +222,29 @@ def test_ai_smoke_fail_does_not_expose_api_key():
     d,m=t.smoke()
     assert m["ok"] is False and d.action=="HOLD"
     assert "super-secret-key" not in str(m)
+
+
+def test_candidate_pullback_reentry_short():
+    from agent.candidate import detect_candidate
+    def tf(trend,close,ema21,ema55,rsi,ret3,ct=100):
+        return {"trend":trend,"close":close,"ema21":ema21,"ema55":ema55,
+                "rsi14":rsi,"ret3_pct":ret3,"bar":{"close_time":ct}}
+    s={"timeframes":{
+        "5m":tf("DOWN",98,100,101,42,-0.3),
+        "15m":tf("DOWN",97,100,101,40,-0.5,200),
+        "1h":tf("MIXED",98,99,100,45,-0.2),
+        "4h":tf("DOWN",95,100,105,42,-1.0)}}
+    c=detect_candidate(s,None)
+    assert c and c.side=="SHORT" and c.reason=="H4_REGIME_PULLBACK_REENTRY"
+
+def test_candidate_pullback_does_not_countertrend():
+    from agent.candidate import detect_candidate
+    def tf(trend,close,ema21,ema55,rsi,ret3,ct=100):
+        return {"trend":trend,"close":close,"ema21":ema21,"ema55":ema55,
+                "rsi14":rsi,"ret3_pct":ret3,"bar":{"close_time":ct}}
+    s={"timeframes":{
+        "5m":tf("UP",102,100,100,60,0.3),
+        "15m":tf("UP",103,100,100,61,0.5,200),
+        "1h":tf("MIXED",102,100,100,60,0.2),
+        "4h":tf("DOWN",95,100,105,42,-1.0)}}
+    assert detect_candidate(s,None) is None
