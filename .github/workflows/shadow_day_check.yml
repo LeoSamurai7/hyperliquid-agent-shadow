@@ -23,5 +23,5 @@ jobs:
           curl --retry 4 --retry-delay 3 --retry-all-errors --fail-with-body "$BASE/execution/state"
           echo
           echo "=== EVENTS ==="
-          curl --retry 4 --retry-delay 3 --retry-all-errors --fail-with-body "$BASE/events?limit=50"
+          curl --retry 4 --retry-delay 3 --retry-all-errors --fail-with-body "$BASE/events?limit=60"
           echo
