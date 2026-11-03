@@ -85,7 +85,11 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           HL_SIGNER_TOKEN: ${{ secrets.HL_SIGNER_TOKEN }}
-        run: python scripts/shadow_once.py | tee shadow_result.json
+          PYTHONPATH: .
+        run: |
+          set -o pipefail
+          mkdir -p "$DATA_DIR"
+          python scripts/shadow_once.py | tee shadow_result.json
 
       - name: Save persistent SHADOW state
         if: always()
