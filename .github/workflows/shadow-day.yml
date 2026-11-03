@@ -1,0 +1,106 @@
+name: SHADOW-DAY 15m
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shadow-day
+  cancel-in-progress: false
+
+jobs:
+  shadow-day:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      DATA_DIR: ./gha-data
+      SHADOW_MODE: "true"
+      EXECUTION_ENABLED: "true"
+      HL_EXECUTION_TARGET: testnet
+      HL_DATA_NETWORK: mainnet
+      SYMBOLS: BTC
+      MIN_CONFIDENCE: "75"
+      MARKET_LOOP_SECONDS: "900"
+      OPENROUTER_BASE_URL: https://openrouter.ai/api/v1
+      OPENROUTER_MODEL: nvidia/nemotron-3.5-lightning:free
+      HL_SIGNER_BASE_URL: http://127.0.0.1:8001
+      HL_EXECUTION_ENABLED: "true"
+      HL_KILL_SWITCH: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore persistent SHADOW state
+        uses: actions/cache/restore@v4
+        with:
+          path: gha-data
+          key: shadow-state-${{ github.run_id }}
+          restore-keys: |
+            shadow-state-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate required secrets
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          HL_AGENT_PRIVATE_KEY: ${{ secrets.HL_AGENT_PRIVATE_KEY }}
+          HL_ACCOUNT_ADDRESS: ${{ secrets.HL_ACCOUNT_ADDRESS }}
+          HL_SIGNER_TOKEN: ${{ secrets.HL_SIGNER_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os,sys
+          names=["OPENROUTER_API_KEY","HL_AGENT_PRIVATE_KEY","HL_ACCOUNT_ADDRESS","HL_SIGNER_TOKEN"]
+          missing=[n for n in names if not os.getenv(n,"").strip()]
+          if missing:
+              print("MISSING_SECRETS="+",".join(missing))
+              sys.exit(2)
+          print("SECRETS_PRESENT")
+          PY
+
+      - name: Start local Testnet signer
+        env:
+          HL_AGENT_PRIVATE_KEY: ${{ secrets.HL_AGENT_PRIVATE_KEY }}
+          HL_ACCOUNT_ADDRESS: ${{ secrets.HL_ACCOUNT_ADDRESS }}
+          HL_SIGNER_TOKEN: ${{ secrets.HL_SIGNER_TOKEN }}
+        run: |
+          uvicorn tools.local_testnet_signer:app --host 127.0.0.1 --port 8001 > signer.log 2>&1 &
+          echo $! > signer.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8001/ping >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat signer.log
+          exit 1
+
+      - name: Run one SHADOW-DAY cycle
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          HL_SIGNER_TOKEN: ${{ secrets.HL_SIGNER_TOKEN }}
+        run: python scripts/shadow_once.py | tee shadow_result.json
+
+      - name: Save persistent SHADOW state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: gha-data
+          key: shadow-state-${{ github.run_id }}
+
+      - name: Upload diagnostic result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadow-day-${{ github.run_id }}
+          path: |
+            shadow_result.json
+            signer.log
+          if-no-files-found: ignore
+          retention-days: 10
