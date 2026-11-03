@@ -13,6 +13,8 @@ def main():
         "candidate": rt.candidate_status(),
         "risk": rt.risk(),
         "latest_execution": st.execution_latest(),
+        "decisions": st.decisions(10, include_invalid=True),
+        "execution_preflight": rt.exec.preflight(),
         "events": st.events(20),
     }, default=str))
 
