@@ -248,3 +248,34 @@ def test_candidate_pullback_does_not_countertrend():
         "1h":tf("MIXED",102,100,100,60,0.2),
         "4h":tf("DOWN",95,100,105,42,-1.0)}}
     assert detect_candidate(s,None) is None
+
+
+def test_episode_lock_suppresses_same_setup_across_new_15m_bar():
+    from agent.candidate import Candidate,episode_step
+    c1=Candidate("ENTRY","SHORT","H4_REGIME_PULLBACK_REENTRY","ENTRY:SHORT:100")
+    action,ep=episode_step(None,c1,100,1_000_000)
+    assert action=="OPEN"
+    c2=Candidate("ENTRY","SHORT","H4_REGIME_PULLBACK_REENTRY","ENTRY:SHORT:200")
+    action,ep2=episode_step(ep,c2,200,1_900_000)
+    assert action=="SUPPRESS"
+    assert ep2["key"]=="ENTRY:SHORT"
+
+def test_episode_lock_requires_full_absence_cooldown_before_release():
+    from agent.candidate import Candidate,episode_step,EPISODE_RESET_GAP_MS
+    c=Candidate("ENTRY","SHORT","MTF_TREND_MOMENTUM","ENTRY:SHORT:100")
+    _,ep=episode_step(None,c,100,1_000_000)
+    action,ep=episode_step(ep,None,100,1_100_000)
+    assert action=="HOLD"
+    action,ep=episode_step(ep,None,200,1_100_000+EPISODE_RESET_GAP_MS-1)
+    assert action=="HOLD"
+    action,ep=episode_step(ep,None,300,1_100_000+EPISODE_RESET_GAP_MS)
+    assert action=="RELEASE" and ep is None
+
+def test_episode_lock_new_side_is_new_episode():
+    from agent.candidate import Candidate,episode_step
+    short=Candidate("ENTRY","SHORT","MTF_TREND_MOMENTUM","ENTRY:SHORT:100")
+    long=Candidate("ENTRY","LONG","MTF_TREND_MOMENTUM","ENTRY:LONG:100")
+    _,ep=episode_step(None,short,100,1_000_000)
+    action,ep2=episode_step(ep,long,100,1_100_000)
+    assert action=="OPEN"
+    assert ep2["key"]=="ENTRY:LONG"

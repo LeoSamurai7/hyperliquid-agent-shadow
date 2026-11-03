@@ -7,7 +7,7 @@ from agent.runtime import Runtime
 from agent.signer import SignerClient
 
 c=load(); st=Store(c.data_dir,c.equity); rt=Runtime(c,st); signer=SignerClient(c.signer_base_url,c.signer_token)
-app=FastAPI(title="Hyperliquid Agent V1.5.0 Natural Candidate Testnet Validator")
+app=FastAPI(title="Hyperliquid Agent V1.6.2 Episode Lock / Cooldown")
 
 @app.on_event("startup")
 def start(): threading.Thread(target=rt.loop,daemon=True).start()
@@ -74,7 +74,7 @@ def report():
     x=st.recent(500); wins=sum(1 for t in x if (t.get("pnl") or 0)>0)
     now=int(time.time()*1000)
     day=datetime.fromtimestamp(now/1000,timezone.utc).strftime("%Y-%m-%d")
-    return {"version":"1.5.0","starting_equity":c.equity,"current_equity":st.equity(),
+    return {"version":"1.6.2","starting_equity":c.equity,"current_equity":st.equity(),
             "closed_trades":len(x),"wins":wins,"win_rate":wins/len(x) if x else None,
             "realized_pnl":sum(float(t.get("pnl") or 0) for t in x),
             "today":st.stats(),"position":st.position(),

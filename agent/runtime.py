@@ -2,7 +2,7 @@ import threading,time
 from datetime import datetime,timezone
 from .market import Market,snapshot
 from .ai import Trader
-from .candidate import detect_candidate,candidate_diagnostics
+from .candidate import detect_candidate,candidate_diagnostics,episode_step
 from .risk import entry_gate
 from .virtual import openv,closev,stops
 from .execution import TestnetExecution
@@ -16,6 +16,7 @@ class Runtime:
         self.last_attempt=int(st.getkv("v13_last_ai_attempt_ms",0) or 0)
         self.last_success=int(st.getkv("v13_last_ai_success_ms",0) or 0)
         self.last_candidate=st.getkv("v13_last_candidate_fingerprint","")
+        self.episode=st.getkv("v162_candidate_episode",None)
         self.err=None; self.ai_err=None; self.snap=None
 
     def _day(self,ts):
@@ -31,14 +32,15 @@ class Runtime:
         ts=(self.snap or {}).get("ts_ms")
         day=self._day(ts or int(time.time()*1000))
         return {
-            "version":"1.6.1",
-            "architecture":"STRICT_PLUS_H4_PULLBACK_AI_CONTRACT_HARDENED",
+            "version":"1.6.2",
+            "architecture":"STRICT_PLUS_H4_PULLBACK_EPISODE_LOCK",
             "execution_enabled":bool(self.c.execution),
             "execution_target":self.c.execution_target,
             "max_testnet_notional_usd":self.c.max_testnet_notional_usd,
             "last_ai_attempt_ms":self.last_attempt,
             "last_ai_success_ms":self.last_success,
             "last_candidate_fingerprint":self.last_candidate,
+            "candidate_episode":self.episode,
             "ai_calls_today":self.st.ai_calls(day),
             "ai_daily_limit":self.c.ai_daily_limit,
             "observer_enabled":False,
@@ -187,14 +189,38 @@ class Runtime:
                 p=self.st.position()
 
         cand=detect_candidate(snap,p)
-        if cand is None:return
-        if cand.fingerprint==self.last_candidate:return
+        bar_close=(snap.get("timeframes",{}).get("15m",{}).get("bar") or {}).get("close_time")
+        old_episode=self.episode
+        episode_action,new_episode=episode_step(self.episode,cand,bar_close,ts)
+        self.episode=new_episode
+        self.st.setkv("v162_candidate_episode",new_episode)
+
+        if episode_action=="RELEASE":
+            self.st.event(ts,"CANDIDATE_EPISODE_RELEASED",
+                          {"episode":old_episode,"bar_close_time":bar_close},
+                          severity="INFO")
+            return
+
+        if cand is None:
+            return
+
+        if episode_action=="SUPPRESS":
+            return
+
+        if old_episode and old_episode.get("key")!=new_episode.get("key"):
+            self.st.event(ts,"CANDIDATE_EPISODE_SUPERSEDED",
+                          {"previous":old_episode,"next":new_episode},
+                          severity="INFO")
 
         self.last_candidate=cand.fingerprint
         self.st.setkv("v13_last_candidate_fingerprint",cand.fingerprint)
+        self.st.event(ts,"CANDIDATE_EPISODE_OPENED",
+                      {"episode":new_episode,"candidate":cand.__dict__,"mark":mark},
+                      severity="INFO")
         self.st.event(ts,"CANDIDATE_DETECTED",
                       {"candidate":cand.__dict__,"mark":mark,
-                       "execution_enabled":bool(self.c.execution)},
+                       "execution_enabled":bool(self.c.execution),
+                       "episode_key":new_episode.get("key")},
                       severity="INFO")
         self._run_ai(snap,p,self.risk(),ts,mark,cand)
 
