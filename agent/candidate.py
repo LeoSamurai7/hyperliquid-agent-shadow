@@ -153,3 +153,54 @@ def candidate_diagnostics(snap):
         "15m_close_time":(t["15m"].get("bar") or {}).get("close_time")
     }
     return out
+
+
+EPISODE_RESET_GAP_MS = 15 * 60 * 1000
+
+def episode_step(active,cand,bar_close_time,ts_ms):
+    """V1.6.2 persisted episode lock.
+
+    One continuous candidate episode may call AI only once. A same-side/same-kind
+    candidate stays locked even when its 15m candle fingerprint changes.
+    The lock is released only after the candidate has been absent for at least
+    one full 15-minute cooldown and the 15m bar has advanced.
+    """
+    bar=int(bar_close_time or 0)
+    ts=int(ts_ms)
+
+    if cand is None:
+        if not isinstance(active,dict) or not active.get("key"):
+            return "EMPTY",None
+        st=dict(active)
+        if st.get("absence_started_ms") is None:
+            st["absence_started_ms"]=ts
+            st["absence_started_bar"]=bar
+            return "HOLD",st
+        gap=ts-int(st.get("absence_started_ms") or ts)
+        absence_bar=int(st.get("absence_started_bar") or 0)
+        if gap>=EPISODE_RESET_GAP_MS and bar!=absence_bar:
+            return "RELEASE",None
+        return "HOLD",st
+
+    key=f"{cand.kind}:{cand.side or 'NONE'}"
+    if isinstance(active,dict) and active.get("key")==key:
+        st=dict(active)
+        st["last_seen_ms"]=ts
+        st["last_seen_bar"]=bar
+        st["last_reason"]=cand.reason
+        st["absence_started_ms"]=None
+        st["absence_started_bar"]=None
+        return "SUPPRESS",st
+
+    return "OPEN",{
+        "key":key,
+        "kind":cand.kind,
+        "side":cand.side,
+        "opened_ms":ts,
+        "opened_bar":bar,
+        "last_seen_ms":ts,
+        "last_seen_bar":bar,
+        "last_reason":cand.reason,
+        "absence_started_ms":None,
+        "absence_started_bar":None,
+    }
