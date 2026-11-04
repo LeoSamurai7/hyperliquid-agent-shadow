@@ -1,9 +1,17 @@
-name: SHADOW-DAY 15m
+name: SHADOW-DAY CORE
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "7,22,37,52 * * * *"
+  workflow_call:
+    secrets:
+      OPENROUTER_API_KEY:
+        required: true
+      HL_AGENT_PRIVATE_KEY:
+        required: true
+      HL_ACCOUNT_ADDRESS:
+        required: true
+      HL_SIGNER_TOKEN:
+        required: true
 
 permissions:
   contents: read

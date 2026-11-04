@@ -1,0 +1,14 @@
+name: SHADOW-DAY T22
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "22 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  call-shadow-day:
+    uses: ./.github/workflows/shadow-day.yml
+    secrets: inherit
