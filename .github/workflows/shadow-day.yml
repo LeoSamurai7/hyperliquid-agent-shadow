@@ -23,7 +23,7 @@ jobs:
       HL_EXECUTION_TARGET: testnet
       HL_DATA_NETWORK: mainnet
       SYMBOLS: BTC
-      MIN_CONFIDENCE: "75"
+      MIN_CONFIDENCE: "70"
       MARKET_LOOP_SECONDS: "900"
       OPENROUTER_BASE_URL: https://openrouter.ai/api/v1
       OPENROUTER_MODEL: nvidia/nemotron-3.5-lightning:free
