@@ -6,6 +6,7 @@ class Candidate:
     side:str|None
     reason:str
     fingerprint:str
+    setup_key:str|None=None  # Optional structural setup ID; all legacy candidates default to None.
 
 def _v(x,default=None):
     return default if x is None else x
@@ -183,6 +184,22 @@ def episode_step(active,cand,bar_close_time,ts_ms):
         return "HOLD",st
 
     key=f"{cand.kind}:{cand.side or 'NONE'}"
+    # Only an explicitly identified NEW structural SHORT setup may re-arm
+    # AI inside a continuous downtrend. Legacy BUY/SHORT keys stay frozen.
+    setup_key=getattr(cand,"setup_key",None)
+    structural=(
+        cand.kind=="ENTRY" and cand.side=="SHORT" and
+        isinstance(setup_key,str) and setup_key.startswith("SHORT_BREAK:") and
+        setup_key[len("SHORT_BREAK:"):].isdigit()
+    )
+    if structural:
+        key=key+":"+setup_key
+    elif (isinstance(active,dict) and cand.kind=="ENTRY" and
+          cand.side=="SHORT" and
+          str(active.get("key","")).startswith("ENTRY:SHORT:SHORT_BREAK:")):
+        # Fall back to legacy short eligibility without treating the same
+        # structural setup as a new AI request on the next candle.
+        key=str(active["key"])
     if isinstance(active,dict) and active.get("key")==key:
         st=dict(active)
         st["last_seen_ms"]=ts
