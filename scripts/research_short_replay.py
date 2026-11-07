@@ -14,6 +14,7 @@ import time
 import requests
 
 from agent.short_research import evaluate_short_break_retest
+from agent.short_continuation_research import evaluate_short_early_continuation
 
 API = 'https://api.hyperliquid.xyz/info'
 PERIOD_MS = {'15m': 900_000, '1h': 3_600_000, '4h': 14_400_000}
@@ -113,7 +114,10 @@ def summarize(trades):
     }
 
 
-def replay(m15,h1,h4,days=30):
+def replay(m15,h1,h4,days=30,lane='retest'):
+    if lane not in ('retest','impulse'):
+        raise ValueError('UNKNOWN_RESEARCH_LANE')
+    detector = evaluate_short_break_retest if lane=='retest' else evaluate_short_early_continuation
     h1_ctx=ema_context(h1)
     h4_ctx=ema_context(h4)
     h1_times=[x['close_time'] for x in h1]
@@ -133,7 +137,7 @@ def replay(m15,h1,h4,days=30):
         if h1i < 0 or h4i < 0 or h1_ctx[h1i] is None or h4_ctx[h4i] is None:
             reason_count['HTF_WARMUP_MISSING']+=1
             continue
-        result=evaluate_short_break_retest(m15[:i+1],h1_ctx[h1i],h4_ctx[h4i],ts)
+        result=detector(m15[:i+1],h1_ctx[h1i],h4_ctx[h4i],ts)
         if not result.eligible:
             reason_count[result.reason]+=1
             continue
@@ -150,7 +154,7 @@ def replay(m15,h1,h4,days=30):
                        'reference_risk_pct':result.risk_pct})
         busy_until=sim['exit_idx']
     return {
-        'research_only':True, 'execution_enabled':False,
+        'research_only':True, 'execution_enabled':False, 'lane':lane,
         'dataset':{'m15_bars':len(m15),'h1_bars':len(h1),'h4_bars':len(h4),
                    'days_requested':days,'sample_cutoff_utc':datetime.fromtimestamp(cutoff/1000,timezone.utc).isoformat()},
         'development':summarize([t for t in trades if t['split']=='DEVELOPMENT']),
@@ -164,6 +168,7 @@ def replay(m15,h1,h4,days=30):
 def main():
     p=argparse.ArgumentParser()
     p.add_argument('--days',type=int,default=30)
+    p.add_argument('--lane',choices=('retest','impulse'),default='retest')
     args=p.parse_args()
     if not 7 <= args.days <= 35:
         p.error('days must be between 7 and 35 (API 5000-bar cap)')
@@ -173,7 +178,7 @@ def main():
         m15=fetch_closed_bars(sess,'15m',end_ms-45*86_400_000,end_ms)
         h1=fetch_closed_bars(sess,'1h',end_ms-70*86_400_000,end_ms)
         h4=fetch_closed_bars(sess,'4h',end_ms-120*86_400_000,end_ms)
-    print(json.dumps(replay(m15,h1,h4,args.days),ensure_ascii=False,indent=2))
+    print(json.dumps(replay(m15,h1,h4,args.days,lane=args.lane),ensure_ascii=False,indent=2))
 
 
 if __name__=='__main__':
