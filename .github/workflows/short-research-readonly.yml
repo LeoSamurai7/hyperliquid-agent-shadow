@@ -34,7 +34,7 @@ jobs:
       - name: Install test requirements
         run: pip install -r requirements.txt
       - name: Unit tests (including frozen core)
-        run: python -m pytest -q tests/test_core.py tests/test_short_research.py tests/test_short_replay.py
+        run: python -m pytest -q tests/test_core.py tests/test_short_research.py tests/test_short_replay.py tests/test_short_incident.py
       - name: Read-only 30-day historical probe (zero trading secrets)
         run: python scripts/research_short_replay.py --days 30 > research_report.json
       - name: Show offline research summary
@@ -50,11 +50,25 @@ jobs:
           print('TOP_REJECTION_REASONS:', data['top_rejection_reasons'])
           print('LIMITATIONS:', data['limitations'])
           PY
+      - name: Diagnose Nov 6 missed SHORT window (read only)
+        run: python scripts/research_short_incident.py > incident_report.json
+      - name: Show incident reason counts
+        run: |
+          python - <<'PY'
+          import json
+          data=json.load(open('incident_report.json',encoding='utf-8'))
+          print('INCIDENT_WINDOW:',data['window'])
+          print('INCIDENT_REASONS:',data['reasons'])
+          for x in data['observations']:
+              print('BAR:',x['utc'],x['h1_trend'],x['h4_trend'],x['research_reason'])
+          PY
       - name: Upload report (3 days)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: research-short-no-orders-${{ github.run_id }}
-          path: research_report.json
+          path: |
+            research_report.json
+            incident_report.json
           retention-days: 3
           if-no-files-found: ignore
