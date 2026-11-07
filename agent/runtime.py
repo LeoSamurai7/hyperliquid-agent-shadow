@@ -166,6 +166,14 @@ class Runtime:
         self.st.decision(ts,d,ok,reason,{
             "meta":meta,"mark":mark,"risk":rs,
             "lane":"CANDIDATE_ONLY","candidate":cand.__dict__,
+            # Preserve bounded rationale for auditing AI-vetoed entries.
+            "ai_decision":{
+                "action":d.action,"confidence":d.confidence,
+                "thesis":d.thesis,"invalidation":d.invalidation,
+                "stop_loss_pct":d.stop_loss_pct,
+                "take_profit_pct":d.take_profit_pct,
+                "horizon_hours":d.horizon_hours,
+            },
             "execution_enabled":bool(self.c.execution)
         })
         self.last_success=ts
