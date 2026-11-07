@@ -12,6 +12,7 @@ import time
 import requests
 
 from agent.short_research import evaluate_short_break_retest
+from agent.short_continuation_research import evaluate_short_early_continuation
 from scripts.research_short_replay import fetch_closed_bars, ema_context
 
 
@@ -19,7 +20,10 @@ def to_ms(value):
     return int(datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()*1000)
 
 
-def incident_diagnostics(m15,h1,h4,start_ms,end_ms):
+def incident_diagnostics(m15,h1,h4,start_ms,end_ms,lane='retest'):
+    if lane not in ('retest','impulse'):
+        raise ValueError('UNKNOWN_RESEARCH_LANE')
+    detector=evaluate_short_break_retest if lane=='retest' else evaluate_short_early_continuation
     h1ctx=ema_context(h1);h4ctx=ema_context(h4)
     h1times=[x['close_time'] for x in h1]
     h4times=[x['close_time'] for x in h4]
@@ -35,7 +39,7 @@ def incident_diagnostics(m15,h1,h4,start_ms,end_ms):
             reason='HTF_WARMUP_MISSING'; eligible=False; key=None
             h1trend=None;h4trend=None
         else:
-            result=evaluate_short_break_retest(m15[:i+1],h1ctx[a],h4ctx[b],ts)
+            result=detector(m15[:i+1],h1ctx[a],h4ctx[b],ts)
             reason=result.reason;eligible=result.eligible;key=result.setup_id
             h1trend=h1ctx[a]['trend'];h4trend=h4ctx[b]['trend']
         reasons[reason]+=1
@@ -45,7 +49,7 @@ def incident_diagnostics(m15,h1,h4,start_ms,end_ms):
                      'eligible':eligible,'research_reason':reason,
                      'setup_id':key})
     return {
-        'research_only':True,'orders_sent':0,
+        'research_only':True,'orders_sent':0,'lane':lane,
         'window':{'start_utc':datetime.fromtimestamp(start_ms/1000,timezone.utc).isoformat(),
                   'end_utc':datetime.fromtimestamp(end_ms/1000,timezone.utc).isoformat(),
                   'bars_checked':len(rows)},
@@ -56,6 +60,7 @@ def incident_diagnostics(m15,h1,h4,start_ms,end_ms):
 
 def main():
     p=argparse.ArgumentParser()
+    p.add_argument('--lane',choices=('retest','impulse'),default='retest')
     p.add_argument('--start',default='2026-11-05T23:30:00Z')
     p.add_argument('--end',default='2026-11-06T09:00:00Z')
     args=p.parse_args()
@@ -67,7 +72,7 @@ def main():
         m15=fetch_closed_bars(sess,'15m',now-45*86_400_000,now)
         h1=fetch_closed_bars(sess,'1h',now-70*86_400_000,now)
         h4=fetch_closed_bars(sess,'4h',now-120*86_400_000,now)
-    result=incident_diagnostics(m15,h1,h4,start_ms,end_ms)
+    result=incident_diagnostics(m15,h1,h4,start_ms,end_ms,lane=args.lane)
     if not result['window']['bars_checked']:
         raise SystemExit('NO_BARS_IN_FOCUS_WINDOW')
     print(json.dumps(result,ensure_ascii=False,indent=2))
