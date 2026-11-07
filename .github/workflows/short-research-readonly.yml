@@ -1,0 +1,60 @@
+name: SHORT Research CI — Read Only (No Orders)
+
+on:
+  push:
+    branches:
+      - research/v17-short-break-retest-20261107
+  pull_request:
+    paths:
+      - agent/short_research.py
+      - scripts/research_short_replay.py
+      - tests/test_short_research.py
+      - tests/test_short_replay.py
+      - .github/workflows/short-research-readonly.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: short-research-readonly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test requirements
+        run: pip install -r requirements.txt
+      - name: Unit tests (including frozen core)
+        run: python -m pytest -q tests/test_core.py tests/test_short_research.py tests/test_short_replay.py
+      - name: Read-only 30-day historical probe (zero trading secrets)
+        run: python scripts/research_short_replay.py --days 30 > research_report.json
+      - name: Show offline research summary
+        run: |
+          python - <<'PY'
+          import json
+          data = json.load(open('research_report.json', encoding='utf-8'))
+          print('RESEARCH_ONLY:', data['research_only'])
+          print('EXECUTION_ENABLED:', data['execution_enabled'])
+          print('DATASET:', data['dataset'])
+          print('DEVELOPMENT:', data['development'])
+          print('OOS:', data['oos'])
+          print('TOP_REJECTION_REASONS:', data['top_rejection_reasons'])
+          print('LIMITATIONS:', data['limitations'])
+          PY
+      - name: Upload report (3 days)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-short-no-orders-${{ github.run_id }}
+          path: research_report.json
+          retention-days: 3
+          if-no-files-found: ignore
