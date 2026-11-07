@@ -31,7 +31,7 @@ def load():
       os.getenv("HL_DATA_NETWORK","mainnet").strip().lower(),
       os.getenv("SYMBOLS","BTC").split(",")[0].strip().upper(),
       f("STARTING_EQUITY_USD",1000),f("RISK_PER_TRADE_PCT",0.25),f("MAX_DAILY_LOSS_PCT",1.5),
-      f("MAX_NOTIONAL_PCT",100),i("MIN_CONFIDENCE",70),i("MAX_TRADES_PER_DAY",6),
+      f("MAX_NOTIONAL_PCT",100),i("MIN_CONFIDENCE",75),i("MAX_TRADES_PER_DAY",6),
       f("MIN_STOP_PCT",0.4),f("MAX_STOP_PCT",4.0),f("MIN_RR",1.5),
       f("FEE_BPS_PER_SIDE",4.5),f("SLIPPAGE_BPS_PER_SIDE",1.0),
       i("MARKET_LOOP_SECONDS",300),daily_limit,
