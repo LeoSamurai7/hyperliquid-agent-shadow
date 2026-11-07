@@ -34,7 +34,7 @@ jobs:
       - name: Install test requirements
         run: pip install -r requirements.txt
       - name: Unit tests (including frozen core)
-        run: python -m pytest -q tests/test_core.py tests/test_short_research.py tests/test_short_replay.py tests/test_short_incident.py
+        run: python -m pytest -q tests/test_core.py tests/test_short_research.py tests/test_short_replay.py tests/test_short_incident.py tests/test_short_continuation.py
       - name: Read-only 30-day historical probe (zero trading secrets)
         run: python scripts/research_short_replay.py --days 30 > research_report.json
       - name: Show offline research summary
@@ -50,6 +50,19 @@ jobs:
           print('TOP_REJECTION_REASONS:', data['top_rejection_reasons'])
           print('LIMITATIONS:', data['limitations'])
           PY
+      - name: Early continuation 30-day research (no orders)
+        run: python scripts/research_short_replay.py --days 30 --lane impulse > impulse_report.json
+      - name: Show early continuation summary
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('impulse_report.json',encoding='utf-8'))
+          print('IMPULSE_RESEARCH_ONLY:',d['research_only'])
+          print('IMPULSE_DEVELOPMENT:',d['development'])
+          print('IMPULSE_OOS:',d['oos'])
+          print('IMPULSE_REJECTIONS:',d['top_rejection_reasons'])
+          print('IMPULSE_TRADE_TIMES:',[(x['signal_utc'],x['r']) for x in d['trades']])
+          PY
       - name: Diagnose Nov 6 missed SHORT window (read only)
         run: python scripts/research_short_incident.py > incident_report.json
       - name: Show incident reason counts
@@ -62,6 +75,17 @@ jobs:
           for x in data['observations']:
               print('BAR:',x['utc'],x['h1_trend'],x['h4_trend'],x['research_reason'])
           PY
+      - name: Diagnose Nov 6 early continuation (no orders)
+        run: python scripts/research_short_incident.py --lane impulse > impulse_incident.json
+      - name: Show Nov 6 impulse reasons
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('impulse_incident.json',encoding='utf-8'))
+          print('IMPULSE_INCIDENT_WINDOW:',d['window'])
+          print('IMPULSE_INCIDENT_REASONS:',d['reasons'])
+          print('IMPULSE_INCIDENT_CANDIDATES:',[(x['utc'],x['setup_id']) for x in d['observations'] if x['eligible']])
+          PY
       - name: Upload report (3 days)
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,5 +94,7 @@ jobs:
           path: |
             research_report.json
             incident_report.json
+            impulse_report.json
+            impulse_incident.json
           retention-days: 3
           if-no-files-found: ignore
