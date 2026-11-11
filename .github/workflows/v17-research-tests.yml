@@ -4,6 +4,8 @@ on:
     paths:
       - 'agent/short_*research.py'
       - 'tests/test_short_*research.py'
+      - 'tests/test_sweep_replay_research.py'
+      - 'scripts/research_sweep_replay.py'
       - '.github/workflows/v17-research-tests.yml'
   workflow_dispatch:
 permissions:
@@ -22,3 +24,4 @@ jobs:
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           python -m unittest discover -s tests -p 'test_short_*research.py' -v
+          python -m unittest discover -s tests -p 'test_sweep_replay_research.py' -v
