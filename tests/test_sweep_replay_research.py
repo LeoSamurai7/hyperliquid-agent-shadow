@@ -20,7 +20,7 @@ class SweepReplayTests(unittest.TestCase):
 
     def test_next_bar_fill(self):
         rows = [bar(i+1) for i in range(12)]
-        rows += [bar(13,103,106,98,100), bar(14,100,101,90,95)]
+        rows += [bar(13,103,106,98,100), bar(14,100,101,80,95)]
         r = replay(rows)
         self.assertEqual(r["results"][0]["entry_time"], 14)
         self.assertEqual(r["results"][0]["exit"], "TARGET")
